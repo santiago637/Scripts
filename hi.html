@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Departamento de Estado Mental - Hydra</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(#0c0c0c, #1a1a1a);
+      color: #fff;
+      overflow: hidden;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 6vh auto;
+      padding: 25px;
+      background-color: #202020;
+      border-radius: 10px;
+      box-shadow: 0 0 12px rgba(255,0,0,0.4);
+    }
+
+    h1 {
+      text-align: center;
+      color: #ff4040;
+      text-shadow: 0 0 3px #ff0000;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% {transform: scale(1);}
+      50% {transform: scale(1.05);}
+      100% {transform: scale(1);}
+    }
+
+    label, select, input {
+      display: block;
+      margin: 15px 0;
+      width: 100%;
+    }
+
+    select, input {
+      padding: 8px;
+      background: #111;
+      color: #fff;
+      border: 1px solid #333;
+      border-radius: 4px;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #ff4040;
+      color: #000;
+      font-weight: bold;
+      border: none;
+      border-radius: 4px;
+      width: 100%;
+      cursor: pointer;
+    }
+
+    .ad-banner {
+      margin: 20px 0;
+      display: flex;
+      justify-content: space-around;
+      flex-wrap: wrap;
+    }
+
+    .ad {
+      width: 48%;
+      height: 120px;
+      background-size: cover;
+      background-position: center;
+      border: 2px solid #333;
+      border-radius: 6px;
+      box-shadow: 0 0 8px rgba(255,255,255,0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Encuesta Neurofragmentada</h1>
+
+    <label for="fractura">¿Tu nivel actual de inestabilidad?</label>
+    <select id="fractura">
+      <option>Normalizado</option>
+      <option>Disociado</option>
+      <option>Fragmentado</option>
+      <option value="reload">Descompuesto</option>
+      <option value="glitch">Portal Corrupto</option>
+    </select>
+
+    <label for="voz">¿Qué voces escuchas cuando hay silencio?</label>
+    <input type="text" id="voz" placeholder="Ej: ecos, fuego, nombres olvidados...">
+
+    <label for="color">Color que aparece al cerrar los ojos:</label>
+    <input type="text" id="color" placeholder="Ej: negro metálico, coral invertido, etc.">
+
+    <div class="ad-banner">
+      <div class="ad" style="background-image: url('https://i.imgur.com/PLZB7zY.jpg');"></div>
+      <div class="ad" style="background-image: url('https://i.imgur.com/zHmnO4G.jpg');"></div>
+    </div>
+
+    <button onclick="analizar()">Enviar</button>
+  </div>
+
+  <script>
+    function analizar() {
+      const fractura = document.getElementById("fractura").value;
+      if (fractura === "reload") {
+        let contador = 0;
+        const recargar = setInterval(() => {
+          location.reload();
+          contador++;
+          if (contador > 4) clearInterval(recargar);
+        }, 800); // recarga hasta 5 veces
+      } else if (fractura === "glitch") {
+        window.location.href = "HAHAHA.html"; // tu archivo corruptor
+      } else {
+        alert("Datos enviados. El plano decidirá tu destino.");
+      }
+    }
+  </script>
+</body>
+</html>
