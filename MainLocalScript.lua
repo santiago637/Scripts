@@ -1,4 +1,4 @@
-local Commands = require(script:WaitForChild("CommandsModule"))
+local Commands = loadstring(game:HttpGet("https://raw.githubusercontent.com/santiago637/Scripts/main/ModuleScriptContainer.lua"))()
 
 local placeholder = "Introducir comandos"
 
