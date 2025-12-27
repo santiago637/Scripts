@@ -172,13 +172,23 @@ commandBox.FocusLost:Connect(function(enterPressed)
     local arg = args[2]
 
     if cmd == "fly" then
-        Commands.Fly(arg)
+        Commands.Fly(arg, false)
+
+    elseif cmd == "unfly" then
+        Commands.Fly(nil, true)
 
     elseif cmd == "noclip" then
-        Commands.Noclip()
+        Commands.Noclip(false)
+
+    elseif cmd == "unnoclip" then
+        Commands.Noclip(true)
 
     elseif cmd == "walkspeed" or cmd == "speed" then
         Commands.WalkSpeed(arg)
+
+    elseif cmd == "unwalkspeed" then
+        -- Resetear a velocidad normal de Roblox (16)
+        Commands.WalkSpeed(16)
 
     else
         print("Comando no reconocido:", text)
