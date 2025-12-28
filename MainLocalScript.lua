@@ -146,6 +146,32 @@ exStroke.Thickness = 1
 exStroke.Color = Color3.fromRGB(0, 90, 200)
 exStroke.Parent = commandBox
 
+-- FEEDBACK LABEL MINIMALISTA
+local feedbackLabel = Instance.new("TextLabel")
+feedbackLabel.Name = "FeedbackLabel"
+feedbackLabel.Size = UDim2.new(1, -20, 0, 24)
+feedbackLabel.Position = UDim2.new(0, 10, 1, -30)
+feedbackLabel.BackgroundTransparency = 1
+feedbackLabel.Text = ""
+feedbackLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+feedbackLabel.Font = Enum.Font.Merriweather
+feedbackLabel.TextScaled = true
+feedbackLabel.ZIndex = 5
+feedbackLabel.Parent = frame
+
+local function showFeedback(msg)
+    feedbackLabel.Text = msg
+    feedbackLabel.TextTransparency = 0
+    task.spawn(function()
+        task.wait(2)
+        for i = 0, 1, 0.1 do
+            feedbackLabel.TextTransparency = i
+            task.wait(0.05)
+        end
+        feedbackLabel.Text = ""
+    end)
+end
+
 -- PLACEHOLDER + COMANDOS
 local placeholder = "Introducir comandos"
 
@@ -173,92 +199,47 @@ commandBox.FocusLost:Connect(function(enterPressed)
 
     if cmd == "fly" then
         Commands.Fly(arg, false)
-
+        showFeedback("Fly activado")
     elseif cmd == "unfly" then
         Commands.Fly(nil, true)
+        showFeedback("Fly desactivado")
 
     elseif cmd == "noclip" then
         Commands.Noclip(false)
-
+        showFeedback("Noclip activado")
     elseif cmd == "unnoclip" then
         Commands.Noclip(true)
+        showFeedback("Noclip desactivado")
 
     elseif cmd == "walkspeed" or cmd == "speed" then
         Commands.WalkSpeed(arg)
-
+        showFeedback("WalkSpeed ajustado")
     elseif cmd == "unwalkspeed" then
-        -- Resetear a velocidad normal de Roblox (16)
         Commands.WalkSpeed(16)
+        showFeedback("WalkSpeed restaurado")
+
+    elseif cmd == "esp" then
+        Commands.ESP(false)
+        showFeedback("ESP activado")
+
+    elseif cmd == "unesp" then
+        Commands.ESP(true)
+        showFeedback("ESP desactivado")
+
+    elseif cmd == "xray" then
+        -- arg opcional (1–10) para ajustar transparencia
+        Commands.XRay(arg, false)
+        showFeedback("XRay activado")
+
+    elseif cmd == "unxray" then
+        Commands.XRay(nil, true)
+        showFeedback("XRay desactivado")
 
     else
         print("Comando no reconocido:", text)
+        showFeedback("Comando no reconocido")
     end
 
     commandBox.Text = placeholder
     commandBox.TextColor3 = Color3.fromRGB(150, 150, 170)
-end)
-
--- ANIMACIÓN
-local menuOpen = false
-local function toggleMenu()
-    if menuOpen then
-        menuOpen = false
-        TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
-            Position = UDim2.new(0.275, 0, 1.1, 0)
-        }):Play()
-        task.wait(0.25)
-        frame.Visible = false
-    else
-        menuOpen = true
-        frame.Visible = true
-        TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-            Position = UDim2.new(0.275, 0, 0.275, 0)
-        }):Play()
-    end
-end
-
-openButton.MouseButton1Click:Connect(toggleMenu)
-closeButton.MouseButton1Click:Connect(toggleMenu)
-
--- DRAGGING (CON CLAMP)
-local dragging = false
-local dragInput, dragStart, startPos
-
-local function clamp(pos)
-    local cam = workspace.CurrentCamera
-    local screen = cam.ViewportSize
-    local size = frame.AbsoluteSize
-
-    local x = math.clamp(pos.X.Offset, 0, screen.X - size.X)
-    local y = math.clamp(pos.Y.Offset, 0, screen.Y - size.Y)
-
-    return UDim2.new(0, x, 0, y)
-end
-
-header.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = frame.Position
-
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-header.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        local newPos = UDim2.new(0, startPos.X.Offset + delta.X, 0, startPos.Y.Offset + delta.Y)
-        frame.Position = clamp(newPos)
-    end
 end)
