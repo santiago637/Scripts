@@ -4,8 +4,7 @@ local TweenService = game:GetService("TweenService")
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
--- Importar MainLocalScript
-local Main = require(script.Parent:WaitForChild("MainLocalScript"))
+local Main = loadstring(game:HttpGet("https://raw.githubusercontent.com/santiago637/Scripts/main/MainLocalScript.lua"))()
 
 -- Crear GUI
 local gui = Instance.new("ScreenGui")
