@@ -6,14 +6,19 @@ local playerGui = localPlayer:WaitForChild("PlayerGui")
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
+-- Importar lógica de comandos
 local Main = loadstring(game:HttpGet("https://raw.githubusercontent.com/santiago637/Scripts/main/MainLocalScript.lua"))()
 
+-- ScreenGui principal
 local gui = Instance.new("ScreenGui")
 gui.Name = "FloopaHubGUI"
 gui.ResetOnSpawn = false
 gui.Parent = playerGui
 
--- Botón Hub (arriba derecha estilo Roblox)
+----------------------------------------------------------------------
+-- BOTÓN HUB (ARRIBA DERECHA, ESTILO ROBLOX)
+----------------------------------------------------------------------
+
 local openButton = Instance.new("TextButton")
 openButton.Name = "HubButton"
 openButton.Size = isMobile and UDim2.new(0,120,0,50) or UDim2.new(0,100,0,40)
@@ -27,18 +32,25 @@ openButton.TextScaled = true
 openButton.Parent = gui
 Instance.new("UICorner", openButton).CornerRadius = UDim.new(0,12)
 
+----------------------------------------------------------------------
 -- FRAME PRINCIPAL (CUADRADO, COMPACTO, ABAJO DERECHA)
+----------------------------------------------------------------------
+
 local frame = Instance.new("Frame")
 frame.Name = "MainFrame"
 frame.Size = isMobile and UDim2.new(0,300,0,350) or UDim2.new(0,260,0,300)
-frame.Position = UDim2.new(1,10,1,10) -- fuera de pantalla
 frame.AnchorPoint = Vector2.new(1,1)
+frame.Position = UDim2.new(1,10,1,10) -- empieza fuera de pantalla
 frame.BackgroundColor3 = Color3.fromRGB(20,20,30)
+frame.BorderSizePixel = 0
 frame.Visible = false
 frame.Parent = gui
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0,14)
 
+----------------------------------------------------------------------
 -- HEADER
+----------------------------------------------------------------------
+
 local header = Instance.new("Frame")
 header.Name = "Header"
 header.Size = UDim2.new(1,0,0,45)
@@ -66,7 +78,7 @@ title.TextScaled = true
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = header
 
--- BOTONES HEADER
+-- Botón minimizar
 local minimizeButton = Instance.new("TextButton")
 minimizeButton.Name = "MinimizeButton"
 minimizeButton.Size = UDim2.new(0,24,0,24)
@@ -79,6 +91,7 @@ minimizeButton.TextScaled = true
 minimizeButton.Parent = header
 Instance.new("UICorner", minimizeButton).CornerRadius = UDim.new(0,6)
 
+-- Botón cerrar (con confirmación)
 local closeButton = Instance.new("TextButton")
 closeButton.Name = "CloseButton"
 closeButton.Size = UDim2.new(0,24,0,24)
@@ -91,23 +104,32 @@ closeButton.TextScaled = true
 closeButton.Parent = header
 Instance.new("UICorner", closeButton).CornerRadius = UDim.new(0,6)
 
--- TEXTBOX
+----------------------------------------------------------------------
+-- TEXTBOX PARA COMANDOS
+----------------------------------------------------------------------
+
 local commandBox = Instance.new("TextBox")
 commandBox.Name = "CommandBox"
 commandBox.Size = UDim2.new(1,-20,0,40)
 commandBox.Position = UDim2.new(0,10,0,55)
 commandBox.BackgroundColor3 = Color3.fromRGB(25,25,40)
-commandBox.Text = "Introducir comando"
+commandBox.Text = ""
+commandBox.PlaceholderText = "Introducir comando"
 commandBox.TextColor3 = Color3.fromRGB(180,180,200)
+commandBox.PlaceholderColor3 = Color3.fromRGB(140,140,170)
 commandBox.Font = Enum.Font.Gotham
 commandBox.TextScaled = true
 commandBox.ClearTextOnFocus = true
 commandBox.Parent = frame
 Instance.new("UICorner", commandBox).CornerRadius = UDim.new(0,10)
 
--- NOTIFICACIONES
+----------------------------------------------------------------------
+-- NOTIFICACIONES (FRAME CON X)
+----------------------------------------------------------------------
+
 local function showNotification(msg)
     local notif = Instance.new("Frame")
+    notif.Name = "Notification"
     notif.Size = UDim2.new(0,260,0,50)
     notif.Position = UDim2.new(1,-270,1,-120)
     notif.BackgroundColor3 = Color3.fromRGB(30,30,50)
@@ -122,6 +144,7 @@ local function showNotification(msg)
     txt.TextColor3 = Color3.fromRGB(255,255,255)
     txt.Font = Enum.Font.GothamBold
     txt.TextScaled = true
+    txt.TextXAlignment = Enum.TextXAlignment.Left
     txt.Parent = notif
 
     local x = Instance.new("TextButton")
@@ -140,17 +163,23 @@ local function showNotification(msg)
     end)
 
     task.delay(5,function()
-        if notif then notif:Destroy() end
+        if notif and notif.Parent then
+            notif:Destroy()
+        end
     end)
 end
 
--- SCROLLFRAME
+----------------------------------------------------------------------
+-- SCROLLFRAME + TOOLTIP
+----------------------------------------------------------------------
+
 local scrollFrame = Instance.new("ScrollingFrame")
 scrollFrame.Name = "CommandsScroll"
 scrollFrame.Size = UDim2.new(1,-20,1,-110)
 scrollFrame.Position = UDim2.new(0,10,0,100)
 scrollFrame.BackgroundColor3 = Color3.fromRGB(25,25,35)
 scrollFrame.ScrollBarThickness = isMobile and 12 or 8
+scrollFrame.CanvasSize = UDim2.new(0,0,0,0)
 scrollFrame.Parent = frame
 Instance.new("UICorner", scrollFrame).CornerRadius = UDim.new(0,10)
 
@@ -160,9 +189,9 @@ padding.PaddingLeft = UDim.new(0,6)
 padding.PaddingRight = UDim.new(0,6)
 padding.Parent = scrollFrame
 
--- TOOLTIP
 local tooltip = Instance.new("TextLabel")
-tooltip.Size = UDim2.new(0,200,0,40)
+tooltip.Name = "TooltipLabel"
+tooltip.Size = UDim2.new(0,220,0,40)
 tooltip.BackgroundColor3 = Color3.fromRGB(30,30,50)
 tooltip.TextColor3 = Color3.fromRGB(255,255,255)
 tooltip.Font = Enum.Font.Merriweather
@@ -171,29 +200,33 @@ tooltip.Visible = false
 tooltip.Parent = gui
 Instance.new("UICorner", tooltip).CornerRadius = UDim.new(0,8)
 
--- COMANDOS
+----------------------------------------------------------------------
+-- LISTA DE COMANDOS
+----------------------------------------------------------------------
+
 local commandsInfo = {
-    fly="Permite volar.",
-    unfly="Desactiva el vuelo.",
-    noclip="Atravesar paredes.",
-    unnoclip="Desactiva noclip.",
-    walkspeed="Cambia velocidad.",
-    unwalkspeed="Velocidad normal.",
-    esp="Resalta jugadores.",
-    unesp="Desactiva ESP.",
-    xray="Transparencia paredes.",
-    unxray="Desactiva XRay.",
-    killaura="Ataca automáticamente.",
-    unkillaura="Desactiva Killaura.",
-    handlekill="Ataca con arma.",
-    unhandlekill="Desactiva HandleKill.",
-    aimbot="Apunta automático.",
-    unaimbot="Desactiva Aimbot."
+    fly = "Permite volar.",
+    unfly = "Desactiva el vuelo.",
+    noclip = "Atravesar paredes.",
+    unnoclip = "Desactiva noclip.",
+    walkspeed = "Cambia velocidad.",
+    unwalkspeed = "Velocidad normal.",
+    esp = "Resalta jugadores.",
+    unesp = "Desactiva ESP.",
+    xray = "Transparencia paredes.",
+    unxray = "Desactiva XRay.",
+    killaura = "Ataca automáticamente.",
+    unkillaura = "Desactiva Killaura.",
+    handlekill = "Ataca con arma.",
+    unhandlekill = "Desactiva HandleKill.",
+    aimbot = "Apunta automático.",
+    unaimbot = "Desactiva Aimbot."
 }
 
 local y = 0
 for cmd,desc in pairs(commandsInfo) do
     local b = Instance.new("TextButton")
+    b.Name = cmd.."Button"
     b.Size = UDim2.new(1,0,0,32)
     b.Position = UDim2.new(0,0,0,y)
     b.BackgroundColor3 = Color3.fromRGB(35,35,55)
@@ -206,13 +239,19 @@ for cmd,desc in pairs(commandsInfo) do
 
     y = y + 36
 
+    -- Ejecutar comando con pcall
     b.MouseButton1Click:Connect(function()
         local ok = pcall(function()
             Main.ExecuteCommand(cmd)
         end)
-        showNotification(ok and ("Comando ejecutado: "..cmd) or ("Error: "..cmd))
+        if ok then
+            showNotification("Comando ejecutado: "..cmd)
+        else
+            showNotification("Error al ejecutar: "..cmd)
+        end
     end)
 
+    -- Tooltip PC
     b.MouseEnter:Connect(function()
         if not isMobile then
             local pos = UserInputService:GetMouseLocation()
@@ -225,59 +264,176 @@ for cmd,desc in pairs(commandsInfo) do
     b.MouseLeave:Connect(function()
         tooltip.Visible = false
     end)
+
+    -- Tooltip móvil (long press)
+    if isMobile then
+        b.TouchLongPress:Connect(function()
+            tooltip.Text = desc
+            tooltip.Position = UDim2.new(0.5,-110,0.8,-20)
+            tooltip.Visible = true
+            task.delay(2,function()
+                tooltip.Visible = false
+            end)
+        end)
+    end
 end
 
 scrollFrame.CanvasSize = UDim2.new(0,0,0,y)
 
--- ANIMACIÓN
-local open = false
-local function toggle()
-    if open then
-        TweenService:Create(frame,TweenInfo.new(0.35),{Position=UDim2.new(1,10,1,10)}):Play()
-        task.delay(0.35,function() frame.Visible=false end)
+----------------------------------------------------------------------
+-- ANIMACIÓN ABRIR / CERRAR (ABAJO DERECHA)
+----------------------------------------------------------------------
+
+local hubOpen = false
+
+local function toggleFrame(show)
+    if show then
+        frame.Visible = true
+        TweenService:Create(
+            frame,
+            TweenInfo.new(0.35,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),
+            {Position = UDim2.new(1,-10,1,-10)}
+        ):Play()
+        hubOpen = true
     else
-        frame.Visible=true
-        TweenService:Create(frame,TweenInfo.new(0.35),{Position=UDim2.new(1,-10,1,-10)}):Play()
+        local tween = TweenService:Create(
+            frame,
+            TweenInfo.new(0.35,Enum.EasingStyle.Quad,Enum.EasingDirection.In),
+            {Position = UDim2.new(1,10,1,10)}
+        )
+        tween:Play()
+        tween.Completed:Connect(function()
+            frame.Visible = false
+        end)
+        hubOpen = false
     end
-    open = not open
 end
 
-openButton.MouseButton1Click:Connect(toggle)
-minimizeButton.MouseButton1Click:Connect(toggle)
-closeButton.MouseButton1Click:Connect(function() gui:Destroy() end)
+openButton.MouseButton1Click:Connect(function()
+    toggleFrame(not hubOpen)
+end)
 
--- ARRASTRE SUAVE
-local dragging=false
+minimizeButton.MouseButton1Click:Connect(function()
+    toggleFrame(false)
+end)
+
+----------------------------------------------------------------------
+-- CONFIRMACIÓN AL CERRAR
+----------------------------------------------------------------------
+
+closeButton.MouseButton1Click:Connect(function()
+    local confirmFrame = Instance.new("Frame")
+    confirmFrame.Name = "ConfirmFrame"
+    confirmFrame.Size = UDim2.new(0,260,0,120)
+    confirmFrame.Position = UDim2.new(0.5,0,0.5,0)
+    confirmFrame.AnchorPoint = Vector2.new(0.5,0.5)
+    confirmFrame.BackgroundColor3 = Color3.fromRGB(25,25,35)
+    confirmFrame.Parent = gui
+    Instance.new("UICorner", confirmFrame).CornerRadius = UDim.new(0,10)
+
+    local label = Instance.new("TextLabel")
+    label.Name = "ConfirmLabel"
+    label.Size = UDim2.new(1,-20,0.5,0)
+    label.Position = UDim2.new(0,10,0,10)
+    label.BackgroundTransparency = 1
+    label.Text = "¿Seguro que quieres cerrar?"
+    label.TextColor3 = Color3.fromRGB(255,255,255)
+    label.Font = Enum.Font.Merriweather
+    label.TextScaled = true
+    label.Parent = confirmFrame
+
+    local yesButton = Instance.new("TextButton")
+    yesButton.Name = "YesButton"
+    yesButton.Size = UDim2.new(0.4,0,0.25,0)
+    yesButton.Position = UDim2.new(0.08,0,0.65,0)
+    yesButton.BackgroundColor3 = Color3.fromRGB(60,20,20)
+    yesButton.Text = "Sí"
+    yesButton.TextColor3 = Color3.fromRGB(255,255,255)
+    yesButton.Font = Enum.Font.GothamBold
+    yesButton.TextScaled = true
+    yesButton.Parent = confirmFrame
+    Instance.new("UICorner", yesButton).CornerRadius = UDim.new(0,8)
+
+    local noButton = Instance.new("TextButton")
+    noButton.Name = "NoButton"
+    noButton.Size = UDim2.new(0.4,0,0.25,0)
+    noButton.Position = UDim2.new(0.52,0,0.65,0)
+    noButton.BackgroundColor3 = Color3.fromRGB(20,60,20)
+    noButton.Text = "Cancelar"
+    noButton.TextColor3 = Color3.fromRGB(255,255,255)
+    noButton.Font = Enum.Font.GothamBold
+    noButton.TextScaled = true
+    noButton.Parent = confirmFrame
+    Instance.new("UICorner", noButton).CornerRadius = UDim.new(0,8)
+
+    yesButton.MouseButton1Click:Connect(function()
+        gui:Destroy()
+    end)
+
+    noButton.MouseButton1Click:Connect(function()
+        confirmFrame:Destroy()
+    end)
+end)
+
+----------------------------------------------------------------------
+-- COMANDOS MANUALES
+----------------------------------------------------------------------
+
+commandBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed and commandBox.Text ~= "" then
+        local text = commandBox.Text
+        local ok = pcall(function()
+            Main.ExecuteCommand(text)
+        end)
+        if ok then
+            showNotification("Comando ejecutado: "..text)
+        else
+            showNotification("Error al ejecutar: "..text)
+        end
+        commandBox.Text = ""
+    end
+end)
+
+----------------------------------------------------------------------
+-- ARRASTRE SUAVE CON LÍMITES
+----------------------------------------------------------------------
+
+local dragging = false
 local dragStart
 local startPos
 
 header.InputBegan:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-        dragging=true
-        dragStart=i.Position
-        startPos=frame.Position
+    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = i.Position
+        startPos = frame.Position
     end
 end)
 
 UserInputService.InputEnded:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-        dragging=false
+    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
     end
 end)
 
 UserInputService.InputChanged:Connect(function(i)
-    if dragging then
-        local delta=i.Position-dragStart
-        local newX=startPos.X.Offset+delta.X
-        local newY=startPos.Y.Offset+delta.Y
+    if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+        local delta = i.Position - dragStart
 
-        local cam=workspace.CurrentCamera.ViewportSize
-        local fs=frame.AbsoluteSize
-        local m=20
+        if i.UserInputType == Enum.UserInputType.Touch then
+            delta = delta * 0.7
+        end
 
-        newX=math.clamp(newX,m,cam.X-fs.X-m)
-        newY=math.clamp(newY,m,cam.Y-fs.Y-m)
+        local newX = startPos.X.Offset + delta.X
+        local newY = startPos.Y.Offset + delta.Y
 
-        frame.Position=UDim2.fromOffset(newX,newY)
+        local cam = workspace.CurrentCamera.ViewportSize
+        local fs = frame.AbsoluteSize
+        local m = 20
+
+        newX = math.clamp(newX, m, cam.X - fs.X - m)
+        newY = math.clamp(newY, m, cam.Y - fs.Y - m)
+
+        frame.Position = UDim2.fromOffset(newX,newY)
     end
 end)
