@@ -5,46 +5,118 @@ local localPlayer = Players.LocalPlayer
 -- Importar módulo
 local Commands = loadstring(game:HttpGet("https://raw.githubusercontent.com/santiago637/Scripts/main/ModuleScriptContainer.lua"))()
 
+-- Función segura para llamar comandos
+local function safeCall(func, ...)
+    if typeof(func) == "function" then
+        local ok, err = pcall(func, ...)
+        if not ok then
+            warn("[FloopaHub] Error ejecutando comando:", err)
+        end
+    else
+        warn("[FloopaHub] Comando no implementado en el módulo.")
+    end
+end
+
+-- Tabla de alias
+local aliases = {
+    ["fly"] = "fly",
+    ["unfly"] = "unfly",
+
+    ["noclip"] = "noclip",
+    ["unnoclip"] = "unnoclip",
+
+    ["walkspeed"] = "walkspeed",
+    ["speed"] = "walkspeed",
+    ["ws"] = "walkspeed",
+
+    ["unwalkspeed"] = "unwalkspeed",
+
+    ["esp"] = "esp",
+    ["unesp"] = "unesp",
+
+    ["xray"] = "xray",
+    ["unxray"] = "unxray",
+
+    ["killaura"] = "killaura",
+    ["ka"] = "killaura",
+    ["unkillaura"] = "unkillaura",
+
+    ["handlekill"] = "handlekill",
+    ["hkill"] = "handlekill",
+    ["unhandlekill"] = "unhandlekill",
+
+    ["aimbot"] = "aimbot",
+    ["aim"] = "aimbot",
+    ["unaimbot"] = "unaimbot",
+
+    ["infinitejump"] = "infinitejump",
+    ["infjump"] = "infinitejump",
+    ["uninfinitejump"] = "uninfinitejump"
+}
+
 -- Función para ejecutar comandos
 local function executeCommand(text)
     local args = string.split(text, " ")
-    local cmd = args[1] and args[1]:lower()
+    local rawCmd = args[1] and args[1]:lower()
+    local cmd = aliases[rawCmd] or rawCmd
     local arg = args[2]
 
     if cmd == "fly" then
-        Commands.Fly(arg, false)
+        safeCall(Commands.Fly, arg, false)
+
     elseif cmd == "unfly" then
-        Commands.Fly(nil, true)
+        safeCall(Commands.Fly, nil, true)
+
     elseif cmd == "noclip" then
-        Commands.Noclip(false)
+        safeCall(Commands.Noclip, false)
+
     elseif cmd == "unnoclip" then
-        Commands.Noclip(true)
-    elseif cmd == "walkspeed" or cmd == "speed" then
-        Commands.WalkSpeed(arg)
+        safeCall(Commands.Noclip, true)
+
+    elseif cmd == "walkspeed" then
+        safeCall(Commands.WalkSpeed, arg)
+
     elseif cmd == "unwalkspeed" then
-        Commands.WalkSpeed(16)
+        safeCall(Commands.WalkSpeed, 16)
+
     elseif cmd == "esp" then
-        Commands.ESP(false)
+        safeCall(Commands.ESP, false)
+
     elseif cmd == "unesp" then
-        Commands.ESP(true)
+        safeCall(Commands.ESP, true)
+
     elseif cmd == "xray" then
-        Commands.XRay(arg, false)
+        safeCall(Commands.XRay, arg, false)
+
     elseif cmd == "unxray" then
-        Commands.XRay(nil, true)
+        safeCall(Commands.XRay, nil, true)
+
     elseif cmd == "killaura" then
-        Commands.Killaura(arg, false)
+        safeCall(Commands.Killaura, arg, false)
+
     elseif cmd == "unkillaura" then
-        Commands.Killaura(nil, true)
+        safeCall(Commands.Killaura, nil, true)
+
     elseif cmd == "handlekill" then
-        Commands.HandleKill(arg, false)
+        safeCall(Commands.HandleKill, arg, false)
+
     elseif cmd == "unhandlekill" then
-        Commands.HandleKill(nil, true)
+        safeCall(Commands.HandleKill, nil, true)
+
     elseif cmd == "aimbot" then
-        Commands.Aimbot(arg, false)
+        safeCall(Commands.Aimbot, arg, false)
+
     elseif cmd == "unaimbot" then
-        Commands.Aimbot(nil, true)
+        safeCall(Commands.Aimbot, nil, true)
+
+    elseif cmd == "infinitejump" then
+        safeCall(Commands.InfiniteJump, true)
+
+    elseif cmd == "uninfinitejump" then
+        safeCall(Commands.InfiniteJump, false)
+
     else
-        warn("Comando no reconocido:", text)
+        warn("[FloopaHub] Comando no reconocido:", text)
     end
 end
 
