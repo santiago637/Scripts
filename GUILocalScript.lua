@@ -13,11 +13,12 @@ gui.Name = "FloopaHubGUI"
 gui.ResetOnSpawn = false
 gui.Parent = playerGui
 
--- BOTÓN HUB (ABAJO DERECHA)
+-- Botón Hub (arriba derecha estilo Roblox)
 local openButton = Instance.new("TextButton")
 openButton.Name = "HubButton"
-openButton.Size = isMobile and UDim2.new(0,120,0,55) or UDim2.new(0,100,0,45)
-openButton.Position = UDim2.new(1,-(isMobile and 130 or 110),1,-(isMobile and 70 or 60))
+openButton.Size = isMobile and UDim2.new(0,120,0,50) or UDim2.new(0,100,0,40)
+openButton.Position = isMobile and UDim2.new(1,-130,0,10) or UDim2.new(1,-110,0,10)
+openButton.AnchorPoint = Vector2.new(1,0)
 openButton.BackgroundColor3 = Color3.fromRGB(35,35,45)
 openButton.Text = "Hub"
 openButton.TextColor3 = Color3.fromRGB(255,255,255)
