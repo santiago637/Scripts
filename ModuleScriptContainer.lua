@@ -411,7 +411,7 @@ task.spawn(function()
     end
 end)
 
--- HANDLE KILL (usa Tool con Handle si existe)
+-- HANDLE KILL optimizado: usa getNearbyPlayers() + daño forzado
 function module.HandleKill(range, disable)
     if disable then
         handleKillEnabled = false
@@ -426,25 +426,28 @@ function module.HandleKill(range, disable)
             local myChar = localPlayer.Character
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
             local tool = myChar and myChar:FindFirstChildOfClass("Tool")
-            if myChar and myRoot and tool and tool:FindFirstChild("Handle") then
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if p ~= localPlayer and p.Character then
-                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                        local root = p.Character:FindFirstChild("HumanoidRootPart")
-                        if hum and root and hum.Health > 0 then
-                            if dist(myRoot, root) <= radius then
-                                -- Intento de uso del arma client-side
-                                pcall(function()
-                                    tool:Activate()
-                                end)
-                                -- daño simulado (si el servidor no valida, puede no aplicar)
-                                hum:TakeDamage(10)
-                            end
-                        end
+
+            -- si no hay tool o no tiene Handle, no hacemos nada
+            if tool and tool:FindFirstChild("Handle") then
+                -- obtener jugadores cercanos usando tu nueva función
+                local targets = getNearbyPlayers(radius)
+
+                for _, info in ipairs(targets) do
+                    local hum = info.humanoid
+
+                    -- activar tool (si el servidor lo permite, hace daño real)
+                    pcall(function()
+                        tool:Activate()
+                    end)
+
+                    -- daño forzado client-side (solo funciona en juegos sin validación)
+                    if hum and hum.Health > 0 then
+                        hum:TakeDamage(10)
                     end
                 end
             end
-            task.wait(0.4)
+
+            task.wait(0.35)
         end
     end)
 end
