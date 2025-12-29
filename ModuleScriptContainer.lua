@@ -253,19 +253,26 @@ function module.ESP(disable)
     end)
 end
 
--- XRAY natural y cómodo
+-- XRAY PRO: optimizado, suave y sin lag
 function module.XRay(value, disable)
+    -- caché de partes modificadas
+    local modified = {}
+
     if disable then
         xrayEnabled = false
 
-        -- Restaurar solo partes que modificamos
-        for _, part in ipairs(workspace:GetDescendants()) do
-            if part:IsA("BasePart") and part:FindFirstChild("XRayTag") then
-                part.Transparency = part.XRayTag.OriginalTransparency.Value
-                part.Material = part.XRayTag.OriginalMaterial.Value
-                part.XRayTag:Destroy()
+        -- restaurar solo lo que tocamos
+        for part, data in pairs(modified) do
+            if part and part.Parent then
+                part.Transparency = data.Transparency
+                part.Material = data.Material
+                if data.Color then
+                    part.Color = data.Color
+                end
             end
         end
+
+        table.clear(modified)
         return
     end
 
@@ -279,54 +286,47 @@ function module.XRay(value, disable)
 
     task.spawn(function()
         while xrayEnabled do
+            local myChar = localPlayer.Character
+
             for _, part in ipairs(workspace:GetDescendants()) do
+                repeat
+                    -- Solo BaseParts
+                    if not part:IsA("BasePart") then break end
 
-                -- Solo BaseParts
-                if part:IsA("BasePart") then
+                    -- No tocar al jugador
+                    if myChar and part:IsDescendantOf(myChar) then break end
 
-                    -- No tocar partes del jugador
-                    if part:IsDescendantOf(localPlayer.Character) then
-                        continue
-                    end
+                    -- No tocar Terrain ni agua
+                    if part:IsA("Terrain") then break end
+                    if part.Material == Enum.Material.Water then break end
 
-                    -- No tocar partes ya invisibles
-                    if part.Transparency >= 1 then
-                        continue
-                    end
+                    -- No tocar partes invisibles
+                    if part.Transparency >= 1 then break end
 
-                    -- No tocar decals, textures, beams, lights, etc.
-                    if part:IsA("Decal") or part:IsA("Texture") then
-                        continue
-                    end
+                    -- No tocar efectos
+                    if part:IsA("Decal") or part:IsA("Texture") or part:IsA("Beam") or part:IsA("Light") then break end
 
-                    -- Guardar estado original solo una vez
-                    if not part:FindFirstChild("XRayTag") then
-                        local tag = Instance.new("Folder")
-                        tag.Name = "XRayTag"
-                        tag.Parent = part
-
-                        local t = Instance.new("NumberValue")
-                        t.Name = "OriginalTransparency"
-                        t.Value = part.Transparency
-                        t.Parent = tag
-
-                        local m = Instance.new("StringValue")
-                        m.Name = "OriginalMaterial"
-                        m.Value = tostring(part.Material)
-                        m.Parent = tag
+                    -- Guardar estado original una sola vez
+                    if not modified[part] then
+                        modified[part] = {
+                            Transparency = part.Transparency,
+                            Material = part.Material,
+                            Color = part.Color
+                        }
                     end
 
                     -- Aplicar transparencia suave
                     part.Transparency = transparency
 
-                    -- Resaltar NEON ligeramente
+                    -- Resaltar NEON suavemente
                     if part.Material == Enum.Material.Neon then
-                        part.Color = part.Color:Lerp(Color3.fromRGB(255,255,255), 0.15)
+                        part.Color = part.Color:Lerp(Color3.fromRGB(255,255,255), 0.12)
                     end
-                end
+
+                until true
             end
 
-            task.wait(0.5)
+            task.wait(0.4)
         end
     end)
 end
