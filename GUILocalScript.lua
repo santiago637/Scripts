@@ -1,7 +1,3 @@
--- GUILocalScript PRO
--- Interfaz completa para Floopa Hub
--- No contiene lógica de combate, solo UI + ejecución segura de comandos
-
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -71,7 +67,7 @@ logo.Name = "LogoImage"
 logo.Size = UDim2.new(0,32,0,32)
 logo.Position = UDim2.new(0,8,0.5,-16)
 logo.BackgroundTransparency = 1
-logo.Image = "rbxassetid://109038108792734" -- tu asset
+logo.Image = "rbxassetid://117990734815106" -- tu asset
 logo.Parent = header
 
 local title = Instance.new("TextLabel")
