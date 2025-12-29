@@ -218,13 +218,17 @@ function module.ESP(disable)
     end)
 end
 
--- XRAY (transparencia ajustable 1–10)
+-- XRAY natural y cómodo
 function module.XRay(value, disable)
     if disable then
         xrayEnabled = false
+
+        -- Restaurar solo partes que modificamos
         for _, part in ipairs(workspace:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.Transparency = 0
+            if part:IsA("BasePart") and part:FindFirstChild("XRayTag") then
+                part.Transparency = part.XRayTag.OriginalTransparency.Value
+                part.Material = part.XRayTag.OriginalMaterial.Value
+                part.XRayTag:Destroy()
             end
         end
         return
@@ -237,46 +241,140 @@ function module.XRay(value, disable)
     end
 
     xrayEnabled = true
+
     task.spawn(function()
         while xrayEnabled do
             for _, part in ipairs(workspace:GetDescendants()) do
-                if part:IsA("BasePart") and part.Parent ~= localPlayer.Character then
+
+                -- Solo BaseParts
+                if part:IsA("BasePart") then
+
+                    -- No tocar partes del jugador
+                    if part:IsDescendantOf(localPlayer.Character) then
+                        continue
+                    end
+
+                    -- No tocar partes ya invisibles
+                    if part.Transparency >= 1 then
+                        continue
+                    end
+
+                    -- No tocar decals, textures, beams, lights, etc.
+                    if part:IsA("Decal") or part:IsA("Texture") then
+                        continue
+                    end
+
+                    -- Guardar estado original solo una vez
+                    if not part:FindFirstChild("XRayTag") then
+                        local tag = Instance.new("Folder")
+                        tag.Name = "XRayTag"
+                        tag.Parent = part
+
+                        local t = Instance.new("NumberValue")
+                        t.Name = "OriginalTransparency"
+                        t.Value = part.Transparency
+                        t.Parent = tag
+
+                        local m = Instance.new("StringValue")
+                        m.Name = "OriginalMaterial"
+                        m.Value = tostring(part.Material)
+                        m.Parent = tag
+                    end
+
+                    -- Aplicar transparencia suave
                     part.Transparency = transparency
+
+                    -- Resaltar NEON ligeramente
+                    if part.Material == Enum.Material.Neon then
+                        part.Color = part.Color:Lerp(Color3.fromRGB(255,255,255), 0.15)
+                    end
                 end
             end
-            task.wait(0.8)
+
+            task.wait(0.5)
         end
     end)
 end
 
--- KILLAURA (daño simulado client-side cercano)
+-- KILLAURA con rango configurable + círculo visual local
 function module.Killaura(range, disable)
+    -- eliminar círculo si existe
+    local function removeCircle()
+        local char = localPlayer.Character
+        if char then
+            local old = char:FindFirstChild("KillauraCircle")
+            if old then old:Destroy() end
+        end
+    end
+
     if disable then
         killauraEnabled = false
+        removeCircle()
         return
     end
 
+    -- rango numérico
     local radius = tonumber(range) or 15
     killauraEnabled = true
 
+    ------------------------------------------------------------------
+    -- CÍRCULO VISUAL (solo local)
+    ------------------------------------------------------------------
+    removeCircle()
+
+    local char = localPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+
+    if root then
+        local circle = Instance.new("Part")
+        circle.Name = "KillauraCircle"
+        circle.Shape = Enum.PartType.Cylinder
+        circle.Size = Vector3.new(radius * 2, 0.2, radius * 2)
+        circle.Color = Color3.fromRGB(255, 50, 50)
+        circle.Material = Enum.Material.Neon
+        circle.Transparency = 0.65
+        circle.Anchored = true
+        circle.CanCollide = false
+        circle.Parent = char
+
+        -- rotación correcta para que sea un círculo plano
+        circle.Orientation = Vector3.new(90, 0, 0)
+
+        -- actualizar posición constantemente
+        task.spawn(function()
+            while killauraEnabled and circle.Parent do
+                if root then
+                    circle.Position = root.Position - Vector3.new(0, 2.5, 0)
+                end
+                task.wait()
+            end
+        end)
+    end
+
+    ------------------------------------------------------------------
+    -- LÓGICA DE ATAQUE
+    ------------------------------------------------------------------
     task.spawn(function()
         while killauraEnabled do
             local myChar = localPlayer.Character
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
             if myChar and myRoot then
                 for _, p in ipairs(Players:GetPlayers()) do
                     if p ~= localPlayer and p.Character then
                         local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                        local root = p.Character:FindFirstChild("HumanoidRootPart")
-                        if hum and root and hum.Health > 0 then
-                            if dist(myRoot, root) <= radius then
-                                -- daño simulado (no siempre tendrá efecto en todos los juegos)
+                        local root2 = p.Character:FindFirstChild("HumanoidRootPart")
+
+                        if hum and root2 and hum.Health > 0 then
+                            if (myRoot.Position - root2.Position).Magnitude <= radius then
+                                -- daño simulado
                                 hum:TakeDamage(5)
                             end
                         end
                     end
                 end
             end
+
             task.wait(0.3)
         end
     end)
