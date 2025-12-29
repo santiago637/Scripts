@@ -207,18 +207,25 @@ Instance.new("UICorner", tooltip).CornerRadius = UDim.new(0,8)
 local commandsInfo = {
     fly = "Permite volar.",
     unfly = "Desactiva el vuelo.",
+
     noclip = "Atravesar paredes.",
     unnoclip = "Desactiva noclip.",
+
     walkspeed = "Cambia velocidad.",
     unwalkspeed = "Velocidad normal.",
+
     esp = "Resalta jugadores.",
     unesp = "Desactiva ESP.",
+
     xray = "Transparencia paredes.",
     unxray = "Desactiva XRay.",
+
     killaura = "Ataca automáticamente.",
     unkillaura = "Desactiva Killaura.",
+
     handlekill = "Ataca con arma.",
     unhandlekill = "Desactiva HandleKill.",
+
     aimbot = "Apunta automático.",
     unaimbot = "Desactiva Aimbot."
 }
