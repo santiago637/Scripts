@@ -34,6 +34,41 @@ local function getTeamColor(player)
     return Color3.fromRGB(255, 0, 0) -- rojo por defecto si no tiene equipo
 end
 
+-- Obtener jugadores cercanos dentro de un rango
+local function getNearbyPlayers(maxDistance)
+    local myChar = localPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return {} end
+
+    local nearby = {}
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= localPlayer and p.Character then
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+
+            if root and hum and hum.Health > 0 then
+                local d = (myRoot.Position - root.Position).Magnitude
+                if d <= maxDistance then
+                    table.insert(nearby, {
+                        player = p,
+                        root = root,
+                        humanoid = hum,
+                        distance = d
+                    })
+                end
+            end
+        end
+    end
+
+    -- Ordenar por distancia (opcional pero útil)
+    table.sort(nearby, function(a, b)
+        return a.distance < b.distance
+    end)
+
+    return nearby
+end
+
 -- FLY (PC: WASD/Q/E, móvil: joystick y salto para subir)
 function module.Fly(arg, disable)
     local character = localPlayer.Character
@@ -354,39 +389,27 @@ function module.Killaura(range, disable)
         end)
     end
 
-    ------------------------------------------------------------------
-    -- ATAQUE REAL (solo si tiene Tool equipada)
-    ------------------------------------------------------------------
-    task.spawn(function()
-        while killauraEnabled do
-            local myChar = localPlayer.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            local tool = myChar and myChar:FindFirstChildOfClass("Tool")
+------------------------------------------------------------------
+-- ATAQUE REAL usando getNearbyPlayers()
+------------------------------------------------------------------
+task.spawn(function()
+    while killauraEnabled do
+        local myChar = localPlayer.Character
+        local tool = myChar and myChar:FindFirstChildOfClass("Tool")
 
-            -- si no hay tool, no atacar
-            if myChar and myRoot and tool then
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if p ~= localPlayer and p.Character then
-                        local root2 = p.Character:FindFirstChild("HumanoidRootPart")
-                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
+        if tool then
+            local targets = getNearbyPlayers(radius)
 
-                        if root2 and hum and hum.Health > 0 then
-                            if (myRoot.Position - root2.Position).Magnitude <= radius then
-                                -- activar la tool (daño real si la tool lo permite)
-                                pcall(function()
-                                    tool:Activate()
-                                end)
-                            end
-                        end
-                    end
-                end
+            for _, info in ipairs(targets) do
+                pcall(function()
+                    tool:Activate()
+                end)
             end
-
-            task.wait(0.25)
         end
-    end)
-end
 
+        task.wait(0.20)
+    end
+end)
 
 -- HANDLE KILL (usa Tool con Handle si existe)
 function module.HandleKill(range, disable)
