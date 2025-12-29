@@ -1,11 +1,8 @@
--- MainLocalScript
 local Players = game:GetService("Players")
 local localPlayer = Players.LocalPlayer
 
--- Importar módulo
 local Commands = loadstring(game:HttpGet("https://raw.githubusercontent.com/santiago637/Scripts/main/ModuleScriptContainer.lua"))()
 
--- Función segura para llamar comandos
 local function safeCall(func, ...)
     if typeof(func) == "function" then
         local ok, err = pcall(func, ...)
@@ -17,7 +14,6 @@ local function safeCall(func, ...)
     end
 end
 
--- Tabla de alias
 local aliases = {
     ["fly"] = "fly",
     ["unfly"] = "unfly",
@@ -54,7 +50,6 @@ local aliases = {
     ["uninfinitejump"] = "uninfinitejump"
 }
 
--- Función para ejecutar comandos
 local function executeCommand(text)
     local args = string.split(text, " ")
     local rawCmd = args[1] and args[1]:lower()
@@ -120,7 +115,6 @@ local function executeCommand(text)
     end
 end
 
--- Exponer función para que la GUI la use
 return {
     ExecuteCommand = executeCommand
 }
