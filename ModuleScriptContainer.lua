@@ -581,8 +581,7 @@ end
 ---------------------------------------------------------------------
 -- ⚔️ COMBAT (ESPACIO PARA TUS FUNCIONES)
 ---------------------------------------------------------------------
--- KILLAURA real: usa la Tool equipada + círculo visual local
-function module.Killaura(range, disable)
+module.Combat.Killaura = function(range, disable)
     -- función para eliminar el círculo si existe
     local function removeCircle()
         local char = localPlayer.Character
@@ -662,7 +661,7 @@ task.spawn(function()
 end)
 
 -- HANDLE KILL optimizado: usa getNearbyPlayers() + daño forzado
-function module.HandleKill(range, disable)
+module.Combat.HandleKill = function(range, disable)
     if disable then
         handleKillEnabled = false
         return
@@ -703,7 +702,7 @@ function module.HandleKill(range, disable)
 end
 
 -- AIMBOT (apunta la cámara al enemigo más cercano dentro del rango)
-function module.Aimbot(range, disable)
+module.Combat.Aimbot = function(range, disable)
     local camera = workspace.CurrentCamera
     if disable then
         aimbotEnabled = false
