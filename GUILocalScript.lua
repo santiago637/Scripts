@@ -1,6 +1,11 @@
+-- GUILocalScript PRO
+-- Interfaz completa para Floopa Hub
+-- No contiene lógica de combate, solo UI + ejecución segura de comandos
+
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+
 local localPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
@@ -9,14 +14,17 @@ local isMobile = UserInputService.TouchEnabled and not UserInputService.Keyboard
 -- Importar lógica de comandos
 local Main = loadstring(game:HttpGet("https://raw.githubusercontent.com/santiago637/Scripts/main/MainLocalScript.lua"))()
 
--- ScreenGui principal
+----------------------------------------------------------------------
+-- CREAR GUI PRINCIPAL
+----------------------------------------------------------------------
+
 local gui = Instance.new("ScreenGui")
 gui.Name = "FloopaHubGUI"
 gui.ResetOnSpawn = false
 gui.Parent = playerGui
 
 ----------------------------------------------------------------------
--- BOTÓN HUB (ARRIBA DERECHA, ESTILO ROBLOX)
+-- BOTÓN DE APERTURA
 ----------------------------------------------------------------------
 
 local openButton = Instance.new("TextButton")
@@ -33,14 +41,14 @@ openButton.Parent = gui
 Instance.new("UICorner", openButton).CornerRadius = UDim.new(0,12)
 
 ----------------------------------------------------------------------
--- FRAME PRINCIPAL (CUADRADO, COMPACTO, ABAJO DERECHA)
+-- FRAME PRINCIPAL
 ----------------------------------------------------------------------
 
 local frame = Instance.new("Frame")
 frame.Name = "MainFrame"
 frame.Size = isMobile and UDim2.new(0,300,0,350) or UDim2.new(0,260,0,300)
 frame.AnchorPoint = Vector2.new(1,1)
-frame.Position = UDim2.new(1,10,1,10) -- empieza fuera de pantalla
+frame.Position = UDim2.new(1,10,1,10)
 frame.BackgroundColor3 = Color3.fromRGB(20,20,30)
 frame.BorderSizePixel = 0
 frame.Visible = false
@@ -63,7 +71,7 @@ logo.Name = "LogoImage"
 logo.Size = UDim2.new(0,32,0,32)
 logo.Position = UDim2.new(0,8,0.5,-16)
 logo.BackgroundTransparency = 1
-logo.Image = "rbxassetid://109038108792734"
+logo.Image = "rbxassetid://109038108792734" -- tu asset
 logo.Parent = header
 
 local title = Instance.new("TextLabel")
@@ -78,7 +86,6 @@ title.TextScaled = true
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = header
 
--- Botón minimizar
 local minimizeButton = Instance.new("TextButton")
 minimizeButton.Name = "MinimizeButton"
 minimizeButton.Size = UDim2.new(0,24,0,24)
@@ -91,7 +98,6 @@ minimizeButton.TextScaled = true
 minimizeButton.Parent = header
 Instance.new("UICorner", minimizeButton).CornerRadius = UDim.new(0,6)
 
--- Botón cerrar (con confirmación)
 local closeButton = Instance.new("TextButton")
 closeButton.Name = "CloseButton"
 closeButton.Size = UDim2.new(0,24,0,24)
@@ -124,7 +130,7 @@ commandBox.Parent = frame
 Instance.new("UICorner", commandBox).CornerRadius = UDim.new(0,10)
 
 ----------------------------------------------------------------------
--- NOTIFICACIONES (FRAME CON X)
+-- NOTIFICACIONES
 ----------------------------------------------------------------------
 
 local function showNotification(msg)
@@ -201,7 +207,7 @@ tooltip.Parent = gui
 Instance.new("UICorner", tooltip).CornerRadius = UDim.new(0,8)
 
 ----------------------------------------------------------------------
--- LISTA DE COMANDOS
+-- LISTA DE COMANDOS (TODOS)
 ----------------------------------------------------------------------
 
 local commandsInfo = {
@@ -219,6 +225,9 @@ local commandsInfo = {
 
     xray = "Transparencia paredes.",
     unxray = "Desactiva XRay.",
+
+    infinitejump = "Salto infinito.",
+    uninfinitejump = "Desactiva salto infinito.",
 
     killaura = "Ataca automáticamente.",
     unkillaura = "Desactiva Killaura.",
@@ -246,7 +255,6 @@ for cmd,desc in pairs(commandsInfo) do
 
     y = y + 36
 
-    -- Ejecutar comando con pcall
     b.MouseButton1Click:Connect(function()
         local ok = pcall(function()
             Main.ExecuteCommand(cmd)
@@ -258,7 +266,6 @@ for cmd,desc in pairs(commandsInfo) do
         end
     end)
 
-    -- Tooltip PC
     b.MouseEnter:Connect(function()
         if not isMobile then
             local pos = UserInputService:GetMouseLocation()
@@ -272,7 +279,6 @@ for cmd,desc in pairs(commandsInfo) do
         tooltip.Visible = false
     end)
 
-    -- Tooltip móvil (long press)
     if isMobile then
         b.TouchLongPress:Connect(function()
             tooltip.Text = desc
@@ -288,7 +294,7 @@ end
 scrollFrame.CanvasSize = UDim2.new(0,0,0,y)
 
 ----------------------------------------------------------------------
--- ANIMACIÓN ABRIR / CERRAR (ABAJO DERECHA)
+-- ANIMACIÓN ABRIR/CERRAR
 ----------------------------------------------------------------------
 
 local hubOpen = false
@@ -402,7 +408,7 @@ commandBox.FocusLost:Connect(function(enterPressed)
 end)
 
 ----------------------------------------------------------------------
--- ARRASTRE SUAVE CON LÍMITES
+-- ARRASTRE SUAVE
 ----------------------------------------------------------------------
 
 local dragging = false
@@ -427,7 +433,7 @@ UserInputService.InputChanged:Connect(function(i)
     if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
         local delta = i.Position - dragStart
 
-        if i.UserInputType == Enum.UserInputType.Touch then
+                if i.UserInputType == Enum.UserInputType.Touch then
             delta = delta * 0.7
         end
 
@@ -436,11 +442,11 @@ UserInputService.InputChanged:Connect(function(i)
 
         local cam = workspace.CurrentCamera.ViewportSize
         local fs = frame.AbsoluteSize
-        local m = 20
+        local margin = 20
 
-        newX = math.clamp(newX, m, cam.X - fs.X - m)
-        newY = math.clamp(newY, m, cam.Y - fs.Y - m)
+        newX = math.clamp(newX, margin, cam.X - fs.X - margin)
+        newY = math.clamp(newY, margin, cam.Y - fs.Y - margin)
 
-        frame.Position = UDim2.fromOffset(newX,newY)
+        frame.Position = UDim2.fromOffset(newX, newY)
     end
 end)
