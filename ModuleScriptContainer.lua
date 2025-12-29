@@ -296,9 +296,9 @@ function module.XRay(value, disable)
     end)
 end
 
--- KILLAURA con rango configurable + círculo visual local
+-- KILLAURA real: usa la Tool equipada + círculo visual local
 function module.Killaura(range, disable)
-    -- eliminar círculo si existe
+    -- función para eliminar el círculo si existe
     local function removeCircle()
         local char = localPlayer.Character
         if char then
@@ -318,7 +318,7 @@ function module.Killaura(range, disable)
     killauraEnabled = true
 
     ------------------------------------------------------------------
-    -- CÍRCULO VISUAL (solo local)
+    -- CÍRCULO VISUAL REDONDO (solo local)
     ------------------------------------------------------------------
     removeCircle()
 
@@ -328,19 +328,22 @@ function module.Killaura(range, disable)
     if root then
         local circle = Instance.new("Part")
         circle.Name = "KillauraCircle"
-        circle.Shape = Enum.PartType.Cylinder
+        circle.Shape = Enum.PartType.Ball
         circle.Size = Vector3.new(radius * 2, 0.2, radius * 2)
-        circle.Color = Color3.fromRGB(255, 50, 50)
         circle.Material = Enum.Material.Neon
-        circle.Transparency = 0.65
+        circle.Color = Color3.fromRGB(255, 60, 60)
+        circle.Transparency = 0.7
         circle.Anchored = true
         circle.CanCollide = false
         circle.Parent = char
 
-        -- rotación correcta para que sea un círculo plano
-        circle.Orientation = Vector3.new(90, 0, 0)
+        -- Aplastar la esfera para que sea un círculo plano
+        local mesh = Instance.new("SpecialMesh")
+        mesh.MeshType = Enum.MeshType.Sphere
+        mesh.Scale = Vector3.new(1, 0.05, 1)
+        mesh.Parent = circle
 
-        -- actualizar posición constantemente
+        -- Seguir al jugador
         task.spawn(function()
             while killauraEnabled and circle.Parent do
                 if root then
@@ -352,33 +355,38 @@ function module.Killaura(range, disable)
     end
 
     ------------------------------------------------------------------
-    -- LÓGICA DE ATAQUE
+    -- ATAQUE REAL (solo si tiene Tool equipada)
     ------------------------------------------------------------------
     task.spawn(function()
         while killauraEnabled do
             local myChar = localPlayer.Character
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            local tool = myChar and myChar:FindFirstChildOfClass("Tool")
 
-            if myChar and myRoot then
+            -- si no hay tool, no atacar
+            if myChar and myRoot and tool then
                 for _, p in ipairs(Players:GetPlayers()) do
                     if p ~= localPlayer and p.Character then
-                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
                         local root2 = p.Character:FindFirstChild("HumanoidRootPart")
+                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
 
-                        if hum and root2 and hum.Health > 0 then
+                        if root2 and hum and hum.Health > 0 then
                             if (myRoot.Position - root2.Position).Magnitude <= radius then
-                                -- daño simulado
-                                hum:TakeDamage(5)
+                                -- activar la tool (daño real si la tool lo permite)
+                                pcall(function()
+                                    tool:Activate()
+                                end)
                             end
                         end
                     end
                 end
             end
 
-            task.wait(0.3)
+            task.wait(0.25)
         end
     end)
 end
+
 
 -- HANDLE KILL (usa Tool con Handle si existe)
 function module.HandleKill(range, disable)
