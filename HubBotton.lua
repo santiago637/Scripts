@@ -138,8 +138,17 @@ createMenuButton("TPPanelButton","Abrir TP Panel",70,function()
     safeLoad("https://raw.githubusercontent.com/santiago637/Scripts/main/TPPanel.lua")()
 end)
 
+-- 🔥 Integración avanzada con CommandsExecutor
 createMenuButton("CommandsButton","Abrir Ejecutor de Comandos",130,function()
-    safeLoad("https://raw.githubusercontent.com/santiago637/Scripts/main/CommandsExecutor.lua")()
+    local gui = playerGui:FindFirstChild("FloopaHubGUI")
+    local executor = gv.FloopaHub.ExecutorFrame
+    if executor and executor.Parent == gui then
+        executor.Visible = not executor.Visible
+        gv.FloopaHub.ExecutorVisible = executor.Visible
+        notifySafe("Floopa Hub", executor.Visible and "CommandsExecutor abierto" or "CommandsExecutor oculto", 2)
+    else
+        safeLoad("https://raw.githubusercontent.com/santiago637/Scripts/main/CommandsExecutor.lua")()
+    end
 end)
 
 createMenuButton("SettingsButton","Configuración",190,function()
