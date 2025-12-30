@@ -629,34 +629,41 @@ function module.Visual.XRay(value, disable)
 
     context.Flags.XRayEnabled = true
 
+    -- Loop optimizado con batching y delay configurable
     task.spawn(function()
         while context.Flags.XRayEnabled do
-            local char = context.LocalPlayer and context.LocalPlayer.Character
-            -- limitar descendientes a Workspace.Terrain y modelos grandes para rendimiento
-            for _, part in ipairs(Workspace:GetChildren()) do
-                if part:IsA("BasePart")
-                    and part.Transparency < 1
-                    and not (char and part:IsDescendantOf(char))
-                    and part.Parent ~= Players
-                    and part.Parent ~= StarterGui
-                then
-                    if not xrayCache[part] then
-                        xrayCache[part] = {
-                            Transparency = part.Transparency,
-                            Material = part.Material,
-                            Color = part.Color
-                        }
-                    end
-                    part.Transparency = transparency
-                    if part.Material == Enum.Material.Neon then
-                        part.Color = part.Color:Lerp(Color3.fromRGB(255, 255, 255), 0.1)
+            local now = tick()
+            if now - (module._Internal.Performance.LastXRay or 0) >= module.Settings.Visual.XRayUpdateDelay then
+                module._Internal.Performance.LastXRay = now
+                local char = context.LocalPlayer and context.LocalPlayer.Character
+                local count = 0
+                for _, part in ipairs(Workspace:GetDescendants()) do
+                    if part:IsA("BasePart")
+                        and part.Transparency < 1
+                        and not (char and part:IsDescendantOf(char))
+                    then
+                        if not xrayCache[part] then
+                            xrayCache[part] = {
+                                Transparency = part.Transparency,
+                                Material = part.Material,
+                                Color = part.Color
+                            }
+                        end
+                        part.Transparency = transparency
+                        if part.Material == Enum.Material.Neon and not xrayCache[part].NeonAdjusted then
+                            part.Color = part.Color:Lerp(Color3.fromRGB(255, 255, 255), 0.1)
+                            xrayCache[part].NeonAdjusted = true
+                        end
+                        count = count + 1
+                        if count >= module._Internal.AntiLag.MaxPartsBatch then break end
                     end
                 end
             end
-            task.wait(module.Settings.Visual.XRayUpdateDelay)
+            task.wait(0.1)
         end
     end)
-    module.Utility.Log("XRay activado.")
+
+    module.Utility.Log("XRay activado con AntiLag.")
 end
 
 -- Combat
