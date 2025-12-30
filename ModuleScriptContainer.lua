@@ -292,6 +292,23 @@ function module.Movement.Fly(arg, disable)
 
     local moveVec = Vector3.new(0, 0, 0)
 
+    -- Bypass individual para Fly
+    local mt = getrawmetatable(game)
+    setreadonly(mt, false)
+    local oldIndex = mt.__index
+    mt.__index = newcclosure(function(self, key)
+        if context.Flags.Flying and typeof(self) == "Instance" and self:IsA("Humanoid") then
+            if key == "PlatformStand" then
+                return false -- spoof: aparenta que no está en PlatformStand
+            elseif key == "Velocity" then
+                return Vector3.new(0,0,0) -- spoof: aparenta que no hay velocidad rara
+            end
+        end
+        return oldIndex(self, key)
+    end)
+    setreadonly(mt, true)
+
+    -- Teclado PC
     local connBegan = UserInputService.InputBegan:Connect(function(input, gpe)
         if gpe then return end
         if input.KeyCode == Enum.KeyCode.W then
@@ -302,9 +319,9 @@ function module.Movement.Fly(arg, disable)
             moveVec = moveVec + Vector3.new(-1, 0, 0)
         elseif input.KeyCode == Enum.KeyCode.D then
             moveVec = moveVec + Vector3.new(1, 0, 0)
-        elseif input.KeyCode == Enum.KeyCode.Space then
+        elseif input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.E then
             moveVec = moveVec + Vector3.new(0, 1, 0)
-        elseif input.KeyCode == Enum.KeyCode.LeftShift then
+        elseif input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.Q then
             moveVec = moveVec + Vector3.new(0, -1, 0)
         end
     end)
@@ -319,9 +336,9 @@ function module.Movement.Fly(arg, disable)
             moveVec = moveVec - Vector3.new(-1, 0, 0)
         elseif input.KeyCode == Enum.KeyCode.D then
             moveVec = moveVec - Vector3.new(1, 0, 0)
-        elseif input.KeyCode == Enum.KeyCode.Space then
+        elseif input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.E then
             moveVec = moveVec - Vector3.new(0, 1, 0)
-        elseif input.KeyCode == Enum.KeyCode.LeftShift then
+        elseif input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.Q then
             moveVec = moveVec - Vector3.new(0, -1, 0)
         end
     end)
@@ -329,16 +346,25 @@ function module.Movement.Fly(arg, disable)
     module._Internal.AddConnection("Fly_InputBegan", connBegan)
     module._Internal.AddConnection("Fly_InputEnded", connEnded)
 
+    -- Loop principal
     task.spawn(function()
         while context.Flags.Flying do
             char, root = module.Utility.GetCharacterRoot(context.LocalPlayer)
-            if not char or not root then break end
+            hum = module.Utility.GetHumanoid(context.LocalPlayer)
+            if not char or not root or not hum then break end
+
+            -- Dirección combinada: teclado + stick dinámico
             local dir = moveVec
+            if hum.MoveDirection.Magnitude > 0 then
+                dir = dir + hum.MoveDirection
+            end
+
             if dir.Magnitude > 0 then
                 root.Velocity = dir.Unit * flySpeed
             else
                 root.Velocity = Vector3.new(0, 0, 0)
             end
+
             task.wait()
         end
         if hum then hum.PlatformStand = false end
