@@ -1,19 +1,45 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+
+-- Protección: evitar re-ejecución
+local gv = getgenv()
+gv.FloopaHub = gv.FloopaHub or {}
+if gv.FloopaHub.HubButtonLoaded then
+    StarterGui:SetCore("SendNotification", {Title="Floopa Hub", Text="HubButton ya estaba cargado", Duration=3})
+    return
+end
+gv.FloopaHub.HubButtonLoaded = true
+gv.FloopaHub.Version = "1.2"
+
+local function notifySafe(title, text, duration)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {Title=title or "Info", Text=text or "", Duration=duration or 3})
+    end)
+end
+
+-- Espera a que el juego cargue
+if not game:IsLoaded() then
+    pcall(game.Loaded.Wait, game.Loaded)
+end
 
 local localPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
--- GUI principal
-local gui = Instance.new("ScreenGui")
-gui.Name = "FloopaHubGUI"
-gui.ResetOnSpawn = false
-gui.Parent = playerGui
+-- Singleton de GUI
+local gui = playerGui:FindFirstChild("FloopaHubGUI")
+if not gui then
+    gui = Instance.new("ScreenGui")
+    gui.Name = "FloopaHubGUI"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = false
+    gui.Parent = playerGui
+end
 
--- Botón de apertura
-local openButton = Instance.new("TextButton")
+-- Botón de apertura con debounce
+local openButton = gui:FindFirstChild("HubButton") or Instance.new("TextButton")
 openButton.Name = "HubButton"
 openButton.Size = isMobile and UDim2.new(0,120,0,50) or UDim2.new(0,100,0,40)
 openButton.Position = isMobile and UDim2.new(1,-130,0,10) or UDim2.new(1,-110,0,10)
@@ -24,13 +50,12 @@ openButton.TextColor3 = Color3.fromRGB(255,255,255)
 openButton.Font = Enum.Font.GothamBold
 openButton.TextScaled = true
 openButton.Parent = gui
-Instance.new("UICorner", openButton).CornerRadius = UDim.new(0,12)
+if not openButton:FindFirstChildOfClass("UICorner") then
+    Instance.new("UICorner", openButton).CornerRadius = UDim.new(0,12)
+end
 
-----------------------------------------------------------------------
--- MENU PRINCIPAL (más grande y centrado)
-----------------------------------------------------------------------
-
-local menuFrame = Instance.new("Frame")
+-- Menú principal
+local menuFrame = gui:FindFirstChild("MainMenu") or Instance.new("Frame")
 menuFrame.Name = "MainMenu"
 menuFrame.Size = isMobile and UDim2.new(0,380,0,420) or UDim2.new(0,340,0,380)
 menuFrame.Position = UDim2.new(0.5,0,0.5,0)
@@ -38,23 +63,30 @@ menuFrame.AnchorPoint = Vector2.new(0.5,0.5)
 menuFrame.BackgroundColor3 = Color3.fromRGB(20,20,30)
 menuFrame.Visible = false
 menuFrame.Parent = gui
-Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0,14)
+if not menuFrame:FindFirstChildOfClass("UICorner") then
+    Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0,14)
+end
 
--- Header con logo y título
-local header = Instance.new("Frame")
+-- Header
+local header = menuFrame:FindFirstChild("Header") or Instance.new("Frame")
+header.Name = "Header"
 header.Size = UDim2.new(1,0,0,50)
 header.BackgroundColor3 = Color3.fromRGB(0,90,180)
 header.Parent = menuFrame
-Instance.new("UICorner", header).CornerRadius = UDim.new(0,14)
+if not header:FindFirstChildOfClass("UICorner") then
+    Instance.new("UICorner", header).CornerRadius = UDim.new(0,14)
+end
 
-local logo = Instance.new("ImageLabel")
+local logo = header:FindFirstChild("Logo") or Instance.new("ImageLabel")
+logo.Name = "Logo"
 logo.Size = UDim2.new(0,36,0,36)
 logo.Position = UDim2.new(0,10,0.5,-18)
 logo.BackgroundTransparency = 1
 logo.Image = "rbxassetid://117990734815106"
 logo.Parent = header
 
-local title = Instance.new("TextLabel")
+local title = header:FindFirstChild("Title") or Instance.new("TextLabel")
+title.Name = "Title"
 title.Size = UDim2.new(1,-60,1,0)
 title.Position = UDim2.new(0,50,0,0)
 title.BackgroundTransparency = 1
@@ -65,12 +97,8 @@ title.TextScaled = true
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = header
 
-----------------------------------------------------------------------
--- BOTONES DEL MENÚ
-----------------------------------------------------------------------
-
 local function createMenuButton(name, text, posY, callback)
-    local b = Instance.new("TextButton")
+    local b = menuFrame:FindFirstChild(name) or Instance.new("TextButton")
     b.Name = name
     b.Size = UDim2.new(1,-40,0,50)
     b.Position = UDim2.new(0,20,0,posY)
@@ -80,30 +108,51 @@ local function createMenuButton(name, text, posY, callback)
     b.Font = Enum.Font.GothamBold
     b.TextScaled = true
     b.Parent = menuFrame
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0,10)
-
-    b.MouseButton1Click:Connect(callback)
+    if not b:FindFirstChildOfClass("UICorner") then
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0,10)
+    end
+    b.MouseButton1Click:Connect(function()
+        local ok, err = pcall(callback)
+        if not ok then
+            notifySafe("Floopa Hub", "Error: "..tostring(err), 3)
+        end
+    end)
 end
 
--- Botón: abrir TP Panel
+-- Capa de protección a carga externa
+local function safeLoad(url)
+    local ok, res = pcall(function() return game:HttpGet(url) end)
+    if not ok or type(res) ~= "string" or #res < 20 then
+        notifySafe("Floopa Hub", "No se pudo cargar: "..url, 3)
+        return function() end
+    end
+    local fOk, fn = pcall(loadstring, res)
+    if not fOk or type(fn) ~= "function" then
+        notifySafe("Floopa Hub", "Código inválido: "..url, 3)
+        return function() end
+    end
+    return fn
+end
+
 createMenuButton("TPPanelButton","Abrir TP Panel",70,function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/santiago637/Scripts/main/TPPanel.lua"))()
+    safeLoad("https://raw.githubusercontent.com/santiago637/Scripts/main/TPPanel.lua")()
 end)
 
--- Botón: abrir ejecutor de comandos
 createMenuButton("CommandsButton","Abrir Ejecutor de Comandos",130,function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/santiago637/Scripts/main/CommandsExecutor.lua"))()
+    safeLoad("https://raw.githubusercontent.com/santiago637/Scripts/main/CommandsExecutor.lua")()
 end)
 
--- Botón: configuración
 createMenuButton("SettingsButton","Configuración",190,function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/santiago637/Scripts/main/Settings.lua"))()
+    safeLoad("https://raw.githubusercontent.com/santiago637/Scripts/main/Settings.lua")()
 end)
 
-----------------------------------------------------------------------
--- ABRIR/CERRAR MENÚ
-----------------------------------------------------------------------
-
+-- Toggle con debounce
+local lastClick = 0
 openButton.MouseButton1Click:Connect(function()
+    local now = tick()
+    if now - lastClick < 0.15 then return end
+    lastClick = now
     menuFrame.Visible = not menuFrame.Visible
 end)
+
+notifySafe("Floopa Hub", "HubButton cargado (v"..gv.FloopaHub.Version..")", 2)
