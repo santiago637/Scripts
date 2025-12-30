@@ -104,6 +104,27 @@ title.TextScaled = true
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = header
 
+-- Botón cerrar en el header
+local closeBtn = header:FindFirstChild("CloseButton") or Instance.new("TextButton")
+closeBtn.Name = "CloseButton"
+closeBtn.Size = UDim2.new(0,30,0,30)
+closeBtn.Position = UDim2.new(1,-35,0.5,-15) -- esquina derecha del header
+closeBtn.BackgroundColor3 = Color3.fromRGB(35,35,55)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextScaled = true
+closeBtn.Parent = header
+if not closeBtn:FindFirstChildOfClass("UICorner") then
+    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0,8)
+end
+
+-- Acción de cierre
+closeBtn.MouseButton1Click:Connect(function()
+    frame.Visible = false
+    notifySafe("Floopa Hub","CommandsExecutor cerrado",2)
+end)
+
 -- Notificaciones locales en GUI (además de SetCore)
 local function showNotification(msg)
     local notif = Instance.new("Frame")
