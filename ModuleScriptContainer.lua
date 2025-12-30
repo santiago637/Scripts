@@ -77,6 +77,49 @@ module.Settings = {
     }
 }
 
+-- Hook optimizado: protege Kick y remotes, sin tocar Humanoid
+do
+    local mt = getrawmetatable(game)
+    local original = {
+        __namecall = mt.__namecall
+    }
+    setreadonly(mt, false)
+
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        local nameLower = (typeof(self) == "Instance" and (self.Name or "")):lower()
+
+        -- Bloquear Kick directo
+        if method == "Kick" then
+            warn("[FloopaHub] Kick bloqueado.")
+            return nil
+        end
+
+        -- Filtrar remotes sospechosos
+        if (method == "FireServer" or method == "InvokeServer") and typeof(self) == "Instance" then
+            local bad = nameLower:find("ban") or nameLower:find("report") or nameLower:find("anti") or nameLower:find("log")
+            local whitelist = nameLower:find("antique") or nameLower:find("reportcard")
+            if bad and not whitelist then
+                warn("[FloopaHub] Remote bloqueado: " .. self.Name)
+                return nil
+            end
+        end
+
+        return original.__namecall(self, unpack(args))
+    end)
+
+    setreadonly(mt, true)
+
+    -- Función para restaurar el metatable si lo necesitas
+    module._Internal.RestoreMetatable = function()
+        local mt2 = getrawmetatable(game)
+        setreadonly(mt2, false)
+        mt2.__namecall = original.__namecall
+        setreadonly(mt2, true)
+    end
+end
+
 -- Inicializaciones seguras
 module._Internal.Performance = { LastXRay = 0 }
 local espConnection = nil
