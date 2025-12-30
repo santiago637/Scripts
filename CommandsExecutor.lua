@@ -70,6 +70,59 @@ end
 
 local Main = safeLoad("https://raw.githubusercontent.com/santiago637/Scripts/main/MainLocalScript.lua")
 
+-- 🔥 Bypass avanzado integrado en CommandsExecutor
+do
+    local mt = getrawmetatable(game)
+    setreadonly(mt, false)
+
+    local oldNamecall = mt.__namecall
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        local name = tostring(self)
+
+        -- Bloquear Kick directo
+        if method == "Kick" then
+            warn("[FloopaHub] Bypass PRO: Kick bloqueado.")
+            return nil
+        end
+
+        -- Filtrar remotes sospechosos
+        if method == "FireServer" or method == "InvokeServer" then
+            local lower = name:lower()
+            if string.find(lower, "ban") or string.find(lower, "log") or string.find(lower, "report") or string.find(lower, "anti") then
+                warn("[FloopaHub] Bypass PRO: Remote bloqueado ("..name..")")
+                return nil
+            end
+        end
+
+        -- Neutralizar Changed en Humanoid
+        if method == "Connect" and tostring(self) == "Changed" then
+            warn("[FloopaHub] Bypass PRO: intento de Changed bloqueado.")
+            return function() end
+        end
+
+        return oldNamecall(self, unpack(args))
+    end)
+
+    local oldIndex = mt.__index
+    mt.__index = newcclosure(function(self, key)
+        if tostring(self) == "Humanoid" then
+            if key == "WalkSpeed" then
+                return 16
+            elseif key == "JumpPower" then
+                return 50
+            elseif key == "HipHeight" then
+                return 2
+            end
+        end
+        return oldIndex(self, key)
+    end)
+
+    setreadonly(mt, true)
+    print("[FloopaHub] Bypass avanzado activado (Kick + Remotes + Spoof + Changed).")
+end
+
 -- Contexto GUI
 local localPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local playerGui = localPlayer:WaitForChild("PlayerGui")
@@ -331,3 +384,29 @@ UserInputService.InputChanged:Connect(function(i)
 end)
 
 notifySafe("Floopa Hub", "CommandsExecutor listo", 2)
+
+-- 🛡️ Respawn avanzado del GUI
+task.spawn(function()
+    while true do
+        task.wait(3) -- cada 3 segundos revisa
+        local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+        if playerGui and not playerGui:FindFirstChild("FloopaHubGUI") then
+            local gui = Instance.new("ScreenGui")
+            gui.Name = "FloopaHubGUI"
+            gui.ResetOnSpawn = false
+            gui.Parent = playerGui
+
+            -- recrear el frame principal si fue borrado
+            local frame = Instance.new("Frame")
+            frame.Name = "MainFrame"
+            frame.Size = UDim2.new(0,260,0,310)
+            frame.BackgroundColor3 = Color3.fromRGB(20,20,30)
+            frame.BorderSizePixel = 0
+            frame.Visible = true
+            frame.Parent = gui
+            Instance.new("UICorner", frame).CornerRadius = UDim.new(0,14)
+
+            print("[FloopaHub] GUI regenerada tras eliminación.")
+        end
+    end
+end)
