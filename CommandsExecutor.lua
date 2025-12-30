@@ -384,29 +384,3 @@ UserInputService.InputChanged:Connect(function(i)
 end)
 
 notifySafe("Floopa Hub", "CommandsExecutor listo", 2)
-
--- 🛡️ Respawn avanzado del GUI
-task.spawn(function()
-    while true do
-        task.wait(3) -- cada 3 segundos revisa
-        local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
-        if playerGui and not playerGui:FindFirstChild("FloopaHubGUI") then
-            local gui = Instance.new("ScreenGui")
-            gui.Name = "FloopaHubGUI"
-            gui.ResetOnSpawn = false
-            gui.Parent = playerGui
-
-            -- recrear el frame principal si fue borrado
-            local frame = Instance.new("Frame")
-            frame.Name = "MainFrame"
-            frame.Size = UDim2.new(0,260,0,310)
-            frame.BackgroundColor3 = Color3.fromRGB(20,20,30)
-            frame.BorderSizePixel = 0
-            frame.Visible = true
-            frame.Parent = gui
-            Instance.new("UICorner", frame).CornerRadius = UDim.new(0,14)
-
-            print("[FloopaHub] GUI regenerada tras eliminación.")
-        end
-    end
-end)
