@@ -134,10 +134,6 @@ local function safeLoad(url)
     return fn
 end
 
-createMenuButton("TPPanelButton","Abrir TP Panel",70,function()
-    safeLoad("https://raw.githubusercontent.com/santiago637/Scripts/main/TPPanel.lua")()
-end)
-
 -- 🔥 Integración avanzada con CommandsExecutor
 createMenuButton("CommandsButton","Abrir Ejecutor de Comandos",130,function()
     local gui = playerGui:FindFirstChild("FloopaHubGUI")
@@ -151,8 +147,30 @@ createMenuButton("CommandsButton","Abrir Ejecutor de Comandos",130,function()
     end
 end)
 
+-- TP Panel con toggle avanzado
+createMenuButton("TPPanelButton","Abrir TP Panel",70,function()
+    local gui = playerGui:FindFirstChild("FloopaHubGUI")
+    local tpPanel = gv.FloopaHub.TPPanelFrame
+    if tpPanel and tpPanel.Parent == gui then
+        tpPanel.Visible = not tpPanel.Visible
+        gv.FloopaHub.TPPanelVisible = tpPanel.Visible
+        notifySafe("Floopa Hub", tpPanel.Visible and "TP Panel abierto" or "TP Panel oculto", 2)
+    else
+        safeLoad("https://raw.githubusercontent.com/santiago637/Scripts/main/TPPanel.lua")()
+    end
+end)
+
+-- Settings con toggle avanzado
 createMenuButton("SettingsButton","Configuración",190,function()
-    safeLoad("https://raw.githubusercontent.com/santiago637/Scripts/main/Settings.lua")()
+    local gui = playerGui:FindFirstChild("FloopaHubGUI")
+    local settings = gv.FloopaHub.SettingsFrame
+    if settings and settings.Parent == gui then
+        settings.Visible = not settings.Visible
+        gv.FloopaHub.SettingsVisible = settings.Visible
+        notifySafe("Floopa Hub", settings.Visible and "Settings abierto" or "Settings oculto", 2)
+    else
+        safeLoad("https://raw.githubusercontent.com/santiago637/Scripts/main/Settings.lua")()
+    end
 end)
 
 -- Toggle con debounce
