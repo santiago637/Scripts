@@ -1,5 +1,5 @@
 -- Floopa Hub - Librería de comandos (Hub principal)
--- v3.1 - Correcciones críticas + rendimiento + otra capa de seguridad
+-- v3.2 - Correcciones críticas + rendimiento + endurecimiento
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -15,7 +15,7 @@ if not currentCamera then
     currentCamera = Workspace.CurrentCamera
 end
 
--- Protección singleton del módulo
+-- Protección singleton
 local gv = getgenv()
 gv.FloopaHub = gv.FloopaHub or {}
 if gv.FloopaHub.ModuleContainer then
@@ -53,7 +53,6 @@ local context = {
         HipHeight = 2
     }
 }
-
 module._Internal.Context = context
 
 -- Settings
@@ -73,26 +72,23 @@ module.Settings = {
         LogPrefix = "[FloopaHub] "
     },
     Combat = {
-        TeamSafe = true -- evita atacar a compañeros
+        TeamSafe = true,       -- evita atacar a compañeros
+        NeutralSafe = false    -- opcional: evita neutrales si el juego los usa
     }
 }
 
--- Utilidad y notificaciones
-function module.Utility.Log(message)
-    print(module.Settings.Utility.LogPrefix .. tostring(message))
-end
+-- Inicializaciones seguras
+module._Internal.Performance = { LastXRay = 0 }
+local espConnection = nil
+local xrayCache = {}
+local noclipCache = {}
 
-function module.Utility.Warn(message)
-    warn(module.Settings.Utility.LogPrefix .. tostring(message))
-end
-
-function module.Utility.Notify(title, text, duration)
+-- Utilidad
+function module.Utility.Log(msg) print(module.Settings.Utility.LogPrefix..tostring(msg)) end
+function module.Utility.Warn(msg) warn(module.Settings.Utility.LogPrefix..tostring(msg)) end
+function module.Utility.Notify(title,text,duration)
     pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = title or "Info",
-            Text = text or "",
-            Duration = duration or 3
-        })
+        StarterGui:SetCore("SendNotification",{Title=title or "Info",Text=text or "",Duration=duration or 3})
     end)
 end
 
@@ -115,6 +111,10 @@ function module.Utility.SameTeam(p1, p2)
     if not module.Settings.Combat.TeamSafe then return false end
     if p1 and p2 and p1.Team and p2.Team then
         return p1.Team == p2.Team
+    end
+    if module.Settings.Combat.NeutralSafe then
+        -- algunos juegos usan Team == nil para neutral
+        return (p1 and not p1.Team) or (p2 and not p2.Team)
     end
     return false
 end
@@ -157,20 +157,16 @@ function module.Utility.GetNearbyPlayers(maxDistance)
     return nearby
 end
 
-function module._Internal.AddConnection(name, conn)
-    if not conn or typeof(conn) ~= "RBXScriptConnection" then return end
-    if context.Connections[name] then
-        pcall(function() context.Connections[name]:Disconnect() end)
-    end
-    context.Connections[name] = conn
+-- Conexiones seguras
+function module._Internal.AddConnection(name,conn)
+    if not conn or typeof(conn)~="RBXScriptConnection" then return end
+    if context.Connections[name] then pcall(function() context.Connections[name]:Disconnect() end) end
+    context.Connections[name]=conn
 end
 
 function module._Internal.Disconnect(name)
-    local conn = context.Connections[name]
-    if conn then
-        pcall(function() conn:Disconnect() end)
-        context.Connections[name] = nil
-    end
+    local conn=context.Connections[name]
+    if conn then pcall(function() conn:Disconnect() end) context.Connections[name]=nil end
 end
 
 -- Mantener cámara actualizada
@@ -178,180 +174,100 @@ module._Internal.AddConnection("CameraChange", Workspace:GetPropertyChangedSigna
     context.Camera = Workspace.CurrentCamera or context.Camera
 end))
 
----------------------------------------------------------------------
--- AntiLag Extra
----------------------------------------------------------------------
-module._Internal.AntiLag = {
-    CleanupInterval = 25,   -- cada 25s limpia conexiones y cache
-    MaxPlayersBatch = 20,   -- máximo jugadores procesados por ciclo
-    MaxPartsBatch = 250     -- máximo partes procesadas por ciclo
-}
+-- AntiLag
+module._Internal.AntiLag = { CleanupInterval=25, MaxPlayersBatch=20, MaxPartsBatch=250 }
 
--- Limpieza periódica de conexiones y cache
 task.spawn(function()
     while true do
         task.wait(module._Internal.AntiLag.CleanupInterval)
         -- conexiones huérfanas
-        for name, conn in pairs(context.Connections) do
-            if conn and not conn.Connected then
-                context.Connections[name] = nil
-            end
+        for n,c in pairs(context.Connections) do
+            if c and not c.Connected then context.Connections[n]=nil end
         end
         -- cache de XRay
-        for part, data in pairs(xrayCache) do
-            if not part or not part.Parent then
-                xrayCache[part] = nil
-            end
+        for part,_ in pairs(xrayCache) do
+            if not part or not part.Parent then xrayCache[part]=nil end
         end
     end
 end)
 
--- Limitador de ESP (procesa en lotes)
-local oldESP = espConnection
-module._Internal.Disconnect("ESP_Heartbeat")
-espConnection = RunService.Heartbeat:Connect(function()
-    if not context.Flags.ESPEnabled then return end
-    local now = tick()
-    if now - (context._LastESPUpdate or 0) < module.Settings.Visual.ESPUpdateDelay then return end
-    context._LastESPUpdate = now
-    local count = 0
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= context.LocalPlayer and p.Character then
-            local hl = p.Character:FindFirstChild("ESPHighlight")
-            if not hl then
-                hl = Instance.new("Highlight")
-                hl.Name = "ESPHighlight"
-                hl.Parent = p.Character
-            end
-            hl.FillColor = module.Utility.GetTeamColor(p)
-            count = count + 1
-            if count >= module._Internal.AntiLag.MaxPlayersBatch then break end
-        end
-    end
-end)
-module._Internal.AddConnection("ESP_Heartbeat", espConnection)
-
--- Limitador de XRay (procesa en lotes)
-task.spawn(function()
-    while context.Flags.XRayEnabled do
-        local now = tick()
-        if now - (module._Internal.Performance.LastXRay or 0) >= module.Settings.Visual.XRayUpdateDelay then
-            module._Internal.Performance.LastXRay = now
-            local count = 0
-            for _, part in ipairs(Workspace:GetChildren()) do
-                if part:IsA("BasePart") then
-                    if not xrayCache[part] then
-                        xrayCache[part] = {
-                            Transparency = part.Transparency,
-                            Material = part.Material,
-                            Color = part.Color
-                        }
-                    end
-                    part.Transparency = module.Settings.Visual.XRayDefaultTransparency
-                    count = count + 1
-                    if count >= module._Internal.AntiLag.MaxPartsBatch then break end
-                end
-            end
-        end
-        task.wait(0.1)
-    end
-end)
-
-module.Utility.Log("AntiLag extra activado.")
-
-
----------------------------------------------------------------------
--- BYPASS AVANZADO (fusionado + endurecido)
----------------------------------------------------------------------
+-- Hook único y reversible
 do
-    local mt = getrawmetatable(game)
-    setreadonly(mt, false)
+    local mt=getrawmetatable(game)
+    local original={__namecall=mt.__namecall,__index=mt.__index,__newindex=mt.__newindex}
+    setreadonly(mt,false)
 
-    -- Hook único de __namecall
-    local oldNamecall = mt.__namecall
-    mt.__namecall = newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
-        local isInstance = typeof(self) == "Instance"
-        local nameLower = isInstance and self.Name:lower() or tostring(self):lower()
+    mt.__namecall=newcclosure(function(self,...)
+        local method=getnamecallmethod()
+        local nameLower=(typeof(self)=="Instance" and (self.Name or "")):lower()
 
-        -- Bloquear Kick
-        if method == "Kick" then
-            -- No-op para preservar flujo sin ruptura
-            module.Utility.Warn("Bypass PRO: Kick bloqueado.")
-            return nil
+        if method=="Kick" then
+            module.Utility.Warn("Kick bloqueado.")
+            return
         end
 
-        -- Filtrar remotes sospechosos (naive, pero con lista blanca básica)
-        if method == "FireServer" or method == "InvokeServer" then
-            local bad = (string.find(nameLower, "ban")
-                      or string.find(nameLower, "log")
-                      or string.find(nameLower, "report")
-                      or string.find(nameLower, "anti"))
-            local whitelist = (string.find(nameLower, "antique") or string.find(nameLower, "reportcard"))
+        if (method=="FireServer" or method=="InvokeServer") and typeof(self)=="Instance" then
+            local bad=nameLower:find("ban") or nameLower:find("report") or nameLower:find("anti") or nameLower:find("log")
+            local whitelist=nameLower:find("antique") or nameLower:find("reportcard")
             if bad and not whitelist then
-                module.Utility.Warn("Bypass PRO: Remote bloqueado ("..(isInstance and self.Name or tostring(self))..")")
-                return nil
+                module.Utility.Warn("Remote bloqueado: "..self.Name)
+                return
             end
         end
 
-        -- Neutralizar intentos de conectar a Changed del Humanoid (mejor detección)
-        if method == "Connect" and tostring(self) == "Changed" then
-            -- Devuelve una función vacía (connection fake) para no romper scripts que esperan un callable
-            module.Utility.Warn("Bypass PRO: intento de Changed bloqueado.")
-            return function() end
-        end
-
-        return oldNamecall(self, unpack(args))
+        return original.__namecall(self,table.unpack({...}))
     end)
 
-    -- Endurecer __index y __newindex para Humanoid (lectura/escritura)
-    local oldIndex = mt.__index
-    mt.__index = newcclosure(function(self, key)
-        if typeof(self) == "Instance" and self:IsA("Humanoid") then
-            if key == "WalkSpeed" then
-                return module.Settings.Movement.DefaultWalkSpeed
-            elseif key == "JumpPower" then
-                return context._Default.JumpPower
-            elseif key == "HipHeight" then
-                return context._Default.HipHeight
+    mt.__index=newcclosure(function(self,key)
+        if typeof(self)=="Instance" and self:IsA("Humanoid") then
+            if context.Flags.Flying then
+                if key=="PlatformStand" then return false end
+                if key=="Velocity" then return Vector3.new() end
+            end
+            if key=="WalkSpeed" then return module.Settings.Movement.DefaultWalkSpeed end
+            if key=="JumpPower" then return context._Default.JumpPower end
+            if key=="HipHeight" then return context._Default.HipHeight end
+        end
+        return original.__index(self,key)
+    end)
+
+    mt.__newindex=newcclosure(function(self,key,value)
+        if typeof(self)=="Instance" and self:IsA("Humanoid") then
+            if key=="WalkSpeed" then
+                return original.__newindex(self,key,math.clamp(tonumber(value) or module.Settings.Movement.DefaultWalkSpeed,4,200))
+            elseif key=="JumpPower" then
+                return original.__newindex(self,key,math.clamp(tonumber(value) or context._Default.JumpPower,20,150))
+            elseif key=="HipHeight" then
+                return original.__newindex(self,key,math.clamp(tonumber(value) or context._Default.HipHeight,0,5))
             end
         end
-        return oldIndex(self, key)
+        return original.__newindex(self,key,value)
     end)
 
-    local oldNewIndex = mt.__newindex
-    mt.__newindex = newcclosure(function(self, key, value)
-        if typeof(self) == "Instance" and self:IsA("Humanoid") then
-            -- Permite escritura pero normaliza valores peligrosos
-            if key == "WalkSpeed" then
-                local v = tonumber(value) or module.Settings.Movement.DefaultWalkSpeed
-                return oldNewIndex(self, key, math.clamp(v, 4, 200))
-            elseif key == "JumpPower" then
-                local v = tonumber(value) or context._Default.JumpPower
-                return oldNewIndex(self, key, math.clamp(v, 20, 150))
-            elseif key == "HipHeight" then
-                local v = tonumber(value) or context._Default.HipHeight
-                return oldNewIndex(self, key, math.clamp(v, 0, 5))
-            end
-        end
-        return oldNewIndex(self, key, value)
-    end)
+    setreadonly(mt,true)
 
-    setreadonly(mt, true)
-    module.Utility.Log("Bypass avanzado activado (Kick + Remotes + Changed + Spoof R/W).")
+    module._Internal.RestoreMetatable=function()
+        local mt2=getrawmetatable(game)
+        setreadonly(mt2,false)
+        mt2.__namecall=original.__namecall
+        mt2.__index=original.__index
+        mt2.__newindex=original.__newindex
+        setreadonly(mt2,true)
+    end
 end
+
+---------------------------------------------------------------------
+-- Movement
 ---------------------------------------------------------------------
 
--- Movement
 local flySpeed = module.Settings.Movement.FlySpeedBase
+
 function module.Movement.Fly(arg, disable)
     local char, root = module.Utility.GetCharacterRoot(context.LocalPlayer)
     if not char or not root then
         module.Utility.Warn("Fly: Character o HumanoidRootPart no disponibles.")
         return
     end
-
     local hum = module.Utility.GetHumanoid(context.LocalPlayer)
 
     if disable then
@@ -374,53 +290,39 @@ function module.Movement.Fly(arg, disable)
 
     local moveVec = Vector3.new(0, 0, 0)
 
-    -- Bypass individual para Fly
-    local mt = getrawmetatable(game)
-    setreadonly(mt, false)
-    local oldIndex = mt.__index
-    mt.__index = newcclosure(function(self, key)
-        if context.Flags.Flying and typeof(self) == "Instance" and self:IsA("Humanoid") then
-            if key == "PlatformStand" then
-                return false -- spoof: aparenta que no está en PlatformStand
-            elseif key == "Velocity" then
-                return Vector3.new(0,0,0) -- spoof: aparenta que no hay velocidad rara
-            end
-        end
-        return oldIndex(self, key)
-    end)
-    setreadonly(mt, true)
-
     -- Teclado PC
     local connBegan = UserInputService.InputBegan:Connect(function(input, gpe)
         if gpe then return end
-        if input.KeyCode == Enum.KeyCode.W then
+        local kc = input.KeyCode
+        if kc == Enum.KeyCode.W then
             moveVec = moveVec + Vector3.new(0, 0, -1)
-        elseif input.KeyCode == Enum.KeyCode.S then
+        elseif kc == Enum.KeyCode.S then
             moveVec = moveVec + Vector3.new(0, 0, 1)
-        elseif input.KeyCode == Enum.KeyCode.A then
+        elseif kc == Enum.KeyCode.A then
             moveVec = moveVec + Vector3.new(-1, 0, 0)
-        elseif input.KeyCode == Enum.KeyCode.D then
+        elseif kc == Enum.KeyCode.D then
             moveVec = moveVec + Vector3.new(1, 0, 0)
-        elseif input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.E then
+        elseif kc == Enum.KeyCode.Space or kc == Enum.KeyCode.E then
             moveVec = moveVec + Vector3.new(0, 1, 0)
-        elseif input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.Q then
+        elseif kc == Enum.KeyCode.LeftShift or kc == Enum.KeyCode.Q then
             moveVec = moveVec + Vector3.new(0, -1, 0)
         end
     end)
 
     local connEnded = UserInputService.InputEnded:Connect(function(input, gpe)
         if gpe then return end
-        if input.KeyCode == Enum.KeyCode.W then
+        local kc = input.KeyCode
+        if kc == Enum.KeyCode.W then
             moveVec = moveVec - Vector3.new(0, 0, -1)
-        elseif input.KeyCode == Enum.KeyCode.S then
+        elseif kc == Enum.KeyCode.S then
             moveVec = moveVec - Vector3.new(0, 0, 1)
-        elseif input.KeyCode == Enum.KeyCode.A then
+        elseif kc == Enum.KeyCode.A then
             moveVec = moveVec - Vector3.new(-1, 0, 0)
-        elseif input.KeyCode == Enum.KeyCode.D then
+        elseif kc == Enum.KeyCode.D then
             moveVec = moveVec - Vector3.new(1, 0, 0)
-        elseif input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.E then
+        elseif kc == Enum.KeyCode.Space or kc == Enum.KeyCode.E then
             moveVec = moveVec - Vector3.new(0, 1, 0)
-        elseif input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.Q then
+        elseif kc == Enum.KeyCode.LeftShift or kc == Enum.KeyCode.Q then
             moveVec = moveVec - Vector3.new(0, -1, 0)
         end
     end)
@@ -435,7 +337,6 @@ function module.Movement.Fly(arg, disable)
             hum = module.Utility.GetHumanoid(context.LocalPlayer)
             if not char or not root or not hum then break end
 
-            -- Dirección combinada: teclado + stick dinámico
             local dir = moveVec
             if hum.MoveDirection.Magnitude > 0 then
                 dir = dir + hum.MoveDirection
@@ -447,7 +348,7 @@ function module.Movement.Fly(arg, disable)
                 root.Velocity = Vector3.new(0, 0, 0)
             end
 
-            task.wait()
+            RunService.Heartbeat:Wait()
         end
         if hum then hum.PlatformStand = false end
         module._Internal.Disconnect("Fly_InputBegan")
@@ -492,56 +393,73 @@ function module.Movement.WalkSpeed(value)
     hum.WalkSpeed = math.clamp(num, 4, 200)
 end
 
-local noclipLoopRunning = false
+local noclipLoopRunning=false
 function module.Movement.Noclip(disable)
-    local char = context.LocalPlayer and context.LocalPlayer.Character
+    local char=context.LocalPlayer and context.LocalPlayer.Character
     if not char then
         module.Utility.Warn("Noclip: Character no disponible.")
         return
     end
 
     if disable then
-        context.Flags.Noclip = false
-        noclipLoopRunning = false
-        -- restaurar solo partes principales para rendimiento
-        for _, part in ipairs(char:GetChildren()) do
-            if part:IsA("BasePart") then part.CanCollide = true end
+        context.Flags.Noclip=false; noclipLoopRunning=false
+        for part,orig in pairs(noclipCache) do
+            if part and part.Parent then part.CanCollide=orig end
         end
+        table.clear(noclipCache)
         return
     end
 
-    context.Flags.Noclip = true
+    context.Flags.Noclip=true
     if noclipLoopRunning then return end
-    noclipLoopRunning = true
+    noclipLoopRunning=true
 
     task.spawn(function()
         while context.Flags.Noclip do
-            char = context.LocalPlayer and context.LocalPlayer.Character
+            char=context.LocalPlayer and context.LocalPlayer.Character
             if not char or not char.Parent then break end
             for _, part in ipairs(char:GetChildren()) do
-                if part:IsA("BasePart") then part.CanCollide = false end
+                if part:IsA("BasePart") then
+                    if noclipCache[part]==nil then noclipCache[part]=part.CanCollide end
+                    part.CanCollide=false
+                end
             end
-            task.wait()
+            RunService.Heartbeat:Wait()
         end
-        char = context.LocalPlayer and context.LocalPlayer.Character
-        if char then
-            for _, part in ipairs(char:GetChildren()) do
-                if part:IsA("BasePart") then part.CanCollide = true end
-            end
+        for part,orig in pairs(noclipCache) do
+            if part and part.Parent then part.CanCollide=orig end
         end
-        noclipLoopRunning = false
+        table.clear(noclipCache)
+        noclipLoopRunning=false
     end)
 end
 
+---------------------------------------------------------------------
 -- Visual
-local espConnection = nil
-local xrayCache = {}
+---------------------------------------------------------------------
+
+-- ESP
+local function ensureHighlight(player)
+    if not player.Character then return end
+    local hl = player.Character:FindFirstChild("ESPHighlight")
+    if not hl then
+        hl = Instance.new("Highlight")
+        hl.Name = "ESPHighlight"
+        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+        hl.FillTransparency = 0.3
+        hl.OutlineTransparency = 0.1
+        hl.Parent = player.Character
+    end
+    local color = module.Utility.GetTeamColor(player)
+    if hl.FillColor ~= color then
+        hl.FillColor = color
+    end
+end
 
 function module.Visual.ESP(disable)
     if disable then
         context.Flags.ESPEnabled = false
         module._Internal.Disconnect("ESP_Heartbeat")
-        -- desconectar todas las conexiones CharacterAdded registradas
         for name,_ in pairs(context.Connections) do
             if string.find(name, "^ESP_CharAdded_") then
                 module._Internal.Disconnect(name)
@@ -560,20 +478,6 @@ function module.Visual.ESP(disable)
     if context.Flags.ESPEnabled then return end
     context.Flags.ESPEnabled = true
 
-    local function ensureHighlight(player)
-        if not player.Character then return end
-        local hl = player.Character:FindFirstChild("ESPHighlight")
-        if not hl then
-            hl = Instance.new("Highlight")
-            hl.Name = "ESPHighlight"
-            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-            hl.FillTransparency = 0.3
-            hl.OutlineTransparency = 0.1
-            hl.Parent = player.Character
-        end
-        hl.FillColor = module.Utility.GetTeamColor(player)
-    end
-
     local function onCharacterAdded(char)
         if not context.Flags.ESPEnabled then return end
         local player = Players:GetPlayerFromCharacter(char)
@@ -587,9 +491,12 @@ function module.Visual.ESP(disable)
         local now = tick()
         if (context._LastESPUpdate or 0) + module.Settings.Visual.ESPUpdateDelay > now then return end
         context._LastESPUpdate = now
+        local processed = 0
         for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= context.LocalPlayer then
+            if p ~= context.LocalPlayer and p.Character then
                 ensureHighlight(p)
+                processed = processed + 1
+                if processed >= module._Internal.AntiLag.MaxPlayersBatch then break end
             end
         end
     end)
@@ -606,6 +513,7 @@ function module.Visual.ESP(disable)
     module.Utility.Log("ESP activado.")
 end
 
+-- XRay con un solo bucle y cache estable
 function module.Visual.XRay(value, disable)
     if disable then
         context.Flags.XRayEnabled = false
@@ -632,36 +540,41 @@ function module.Visual.XRay(value, disable)
     task.spawn(function()
         while context.Flags.XRayEnabled do
             local char = context.LocalPlayer and context.LocalPlayer.Character
-            local count = 0
+            local processed = 0
             for _, part in ipairs(Workspace:GetDescendants()) do
                 if part:IsA("BasePart")
                     and part.Transparency < 1
                     and not (char and part:IsDescendantOf(char))
                 then
-                    if not xrayCache[part] then
-                        xrayCache[part] = {
+                    local cache = xrayCache[part]
+                    if not cache then
+                        cache = {
                             Transparency = part.Transparency,
                             Material = part.Material,
                             Color = part.Color
                         }
+                        xrayCache[part] = cache
                     end
                     part.Transparency = transparency
-                    if part.Material == Enum.Material.Neon and not xrayCache[part].NeonAdjusted then
+                    if part.Material == Enum.Material.Neon and not cache.NeonAdjusted then
                         part.Color = part.Color:Lerp(Color3.fromRGB(255, 255, 255), 0.1)
-                        xrayCache[part].NeonAdjusted = true
+                        cache.NeonAdjusted = true
                     end
-                    count = count + 1
-                    if count >= module._Internal.AntiLag.MaxPartsBatch then break end
+                    processed = processed + 1
+                    if processed >= module._Internal.AntiLag.MaxPartsBatch then break end
                 end
             end
-            task.wait(module.Settings.Visual.XRayUpdateDelay or 0.5)
+            task.wait(module.Settings.Visual.XRayUpdateDelay or 0.6)
         end
     end)
 
     module.Utility.Log("XRay activado.")
 end
 
+---------------------------------------------------------------------
 -- Combat
+---------------------------------------------------------------------
+
 local killauraEnabled = false
 local handleKillEnabled = false
 local aimbotEnabled = false
@@ -710,30 +623,28 @@ module.Combat.Killaura = function(range, disable)
         circle.Parent = ui
 
         local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(1,0) -- círculo
+        corner.CornerRadius = UDim.new(1,0)
         corner.Parent = circle
     end
 
-    task.spawn(function()
-        while killauraEnabled do
-            local myChar = localPlayer.Character
-            local tool = myChar and myChar:FindFirstChildOfClass("Tool")
-            if tool then
-                local targets = module.Utility.GetNearbyPlayers(radius)
-                for _, info in ipairs(targets) do
-                    -- Solo uso de Tool real
-                    pcall(function() tool:Activate() end)
-                end
+    module._Internal.AddConnection("Killaura_Loop", RunService.Heartbeat:Connect(function()
+        if not killauraEnabled then module._Internal.Disconnect("Killaura_Loop") return end
+        local myChar = localPlayer.Character
+        local tool = myChar and myChar:FindFirstChildOfClass("Tool")
+        if tool then
+            local targets = module.Utility.GetNearbyPlayers(radius)
+            for _, info in ipairs(targets) do
+                pcall(function() tool:Activate() end)
             end
-            task.wait(0.5)
         end
-    end)
+    end))
 end
 
 module.Combat.HandleKill = function(range, disable)
     if disable then
         handleKillEnabled = false
         context.Flags.HandleKill = false
+        module._Internal.Disconnect("HandleKill_Loop")
         return
     end
 
@@ -741,68 +652,66 @@ module.Combat.HandleKill = function(range, disable)
     handleKillEnabled = true
     context.Flags.HandleKill = true
 
-    task.spawn(function()
-        while handleKillEnabled do
-            local myChar = localPlayer.Character
-            local tool = myChar and myChar:FindFirstChildOfClass("Tool")
-            if tool and tool:FindFirstChild("Handle") then
-                local targets = module.Utility.GetNearbyPlayers(radius)
-                for _, info in ipairs(targets) do
-                    -- Solo automatiza contacto con arma real
-                    pcall(function() tool:Activate() end)
-                end
+    module._Internal.AddConnection("HandleKill_Loop", RunService.Heartbeat:Connect(function()
+        if not handleKillEnabled then module._Internal.Disconnect("HandleKill_Loop") return end
+        local myChar = localPlayer.Character
+        local tool = myChar and myChar:FindFirstChildOfClass("Tool")
+        if tool and tool:FindFirstChild("Handle") then
+            local targets = module.Utility.GetNearbyPlayers(radius)
+            for _, info in ipairs(targets) do
+                pcall(function() tool:Activate() end)
             end
-            task.wait(0.7)
         end
-    end)
+    end))
 end
 
 module.Combat.Aimbot = function(range, disable)
     if disable then
         aimbotEnabled = false
         context.Flags.Aimbot = false
+        module._Internal.Disconnect("Aimbot_Loop")
         return
     end
 
-    local camera = context.Camera
     local radius = tonumber(range) or 150
     aimbotEnabled = true
     context.Flags.Aimbot = true
 
-    task.spawn(function()
-        while aimbotEnabled do
-            local myChar = localPlayer.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            camera = context.Camera
-            if myChar and myRoot and camera then
-                local nearestRoot
-                local nearestDist = math.huge
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if p ~= localPlayer and p.Character and not module.Utility.SameTeam(localPlayer, p) then
-                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                        local root = p.Character:FindFirstChild("HumanoidRootPart")
-                        local head = p.Character:FindFirstChild("Head")
-                        if hum and root and hum.Health > 0 then
-                            local d = module.Utility.Dist(myRoot, root)
-                            if d < nearestDist and d <= radius then
-                                nearestDist = d
-                                nearestRoot = head or root
-                            end
+    module._Internal.AddConnection("Aimbot_Loop", RunService.RenderStepped:Connect(function(dt)
+        if not aimbotEnabled then module._Internal.Disconnect("Aimbot_Loop") return end
+        local camera = context.Camera
+        local myChar = localPlayer.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if myChar and myRoot and camera then
+            local nearestRoot
+            local nearestDist = math.huge
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= localPlayer and p.Character and not module.Utility.SameTeam(localPlayer, p) then
+                    local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                    local root = p.Character:FindFirstChild("HumanoidRootPart")
+                    local head = p.Character:FindFirstChild("Head")
+                    if hum and root and hum.Health > 0 then
+                        local d = module.Utility.Dist(myRoot, root)
+                        if d < nearestDist and d <= radius then
+                            nearestDist = d
+                            nearestRoot = head or root
                         end
                     end
                 end
-                if nearestRoot then
-                    local camPos = camera.CFrame.Position
-                    local look = CFrame.new(camPos, nearestRoot.Position)
-                    camera.CFrame = camera.CFrame:Lerp(look, 0.20)
-                end
             end
-            RunService.RenderStepped:Wait()
+            if nearestRoot then
+                local camPos = camera.CFrame.Position
+                local look = CFrame.new(camPos, nearestRoot.Position)
+                local factor = math.clamp(0.15 + (dt or 0)*0.5, 0.15, 0.35)
+                camera.CFrame = camera.CFrame:Lerp(look, factor)
+            end
         end
-    end)
+    end))
 end
 
+---------------------------------------------------------------------
 -- Aliases planos
+---------------------------------------------------------------------
 function module.Fly(arg, disable) return module.Movement.Fly(arg, disable) end
 function module.Noclip(disable) return module.Movement.Noclip(disable) end
 function module.WalkSpeed(value) return module.Movement.WalkSpeed(value) end
@@ -813,22 +722,20 @@ function module.Killaura(...) if module.Combat.Killaura then return module.Comba
 function module.HandleKill(...) if module.Combat.HandleKill then return module.Combat.HandleKill(...) else module.Utility.Warn("HandleKill no implementada") end end
 function module.Aimbot(...) if module.Combat.Aimbot then return module.Combat.Aimbot(...) else module.Utility.Warn("Aimbot no implementada") end end
 
--- Limpieza
+---------------------------------------------------------------------
+-- Limpieza total y watchdog
+---------------------------------------------------------------------
 function module._Internal.CleanupAll()
-    context.Flags.Flying = false
-    context.Flags.InfiniteJump = false
-    context.Flags.Noclip = false
-    context.Flags.ESPEnabled = false
-    context.Flags.XRayEnabled = false
-    context.Flags.Killaura = false
-    context.Flags.HandleKill = false
-    context.Flags.Aimbot = false
+    -- flags
+    for k in pairs(context.Flags) do context.Flags[k] = false end
 
+    -- conexiones
     for name, conn in pairs(context.Connections) do
         pcall(function() conn:Disconnect() end)
         context.Connections[name] = nil
     end
 
+    -- restaura XRay
     for part, data in pairs(xrayCache) do
         if part and part.Parent then
             part.Transparency = data.Transparency
@@ -838,27 +745,32 @@ function module._Internal.CleanupAll()
     end
     table.clear(xrayCache)
 
-    -- Restaurar valores por defecto seguros
+    -- visual Killaura
+    if context.Camera then
+        local oldUI = context.Camera:FindFirstChild("KillauraCircleGui")
+        if oldUI then oldUI:Destroy() end
+    end
+
+    -- Humanoid defaults
     local hum = module.Utility.GetHumanoid(context.LocalPlayer)
     if hum then
         pcall(function()
+            hum.PlatformStand = false
             hum.WalkSpeed = module.Settings.Movement.DefaultWalkSpeed
             hum.JumpPower = context._Default.JumpPower
             hum.HipHeight = context._Default.HipHeight
         end)
     end
 
-    -- limpiar visual de killaura local
-    if context.Camera then
-        local oldUI = context.Camera:FindFirstChild("KillauraCircleGui")
-        if oldUI then oldUI:Destroy() end
+    -- restaura metatable
+    if module._Internal.RestoreMetatable then
+        pcall(module._Internal.RestoreMetatable)
     end
 
     module.Utility.Log("CleanupAll ejecutado.")
 end
 
--- Capa extra de seguridad: watchdog de integridad básica
--- Si otro script intenta reemplazar nuestro módulo en getgenv, lo restauramos.
+-- Watchdog de integridad básica
 task.spawn(function()
     while true do
         task.wait(5)
