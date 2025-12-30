@@ -145,6 +145,68 @@ function module._Internal.Disconnect(name)
     end
 end
 
+---------------------------------------------------------------------
+-- BYPASS AVANZADO (Pro)
+---------------------------------------------------------------------
+do
+    local mt = getrawmetatable(game)
+    setreadonly(mt, false)
+
+    local oldNamecall = mt.__namecall
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        local name = tostring(self)
+
+        -- Bloquear Kick directo
+        if method == "Kick" then
+            module.Utility.Warn("Bypass PRO: Kick bloqueado.")
+            return nil
+        end
+
+        -- Filtrar remotes sospechosos
+        if method == "FireServer" or method == "InvokeServer" then
+            local lower = name:lower()
+            if string.find(lower, "ban") or string.find(lower, "log") or string.find(lower, "report") or string.find(lower, "anti") then
+                module.Utility.Warn("Bypass PRO: Remote bloqueado ("..name..")")
+                return nil
+            end
+        end
+
+        return oldNamecall(self, unpack(args))
+    end)
+
+    local oldIndex = mt.__index
+    mt.__index = newcclosure(function(self, key)
+        if tostring(self) == "Humanoid" then
+            if key == "WalkSpeed" then
+                return module.Settings.Movement.DefaultWalkSpeed
+            elseif key == "JumpPower" then
+                return 50
+            elseif key == "HipHeight" then
+                return 2
+            end
+        end
+        return oldIndex(self, key)
+    end)
+
+    -- Neutralizar Changed en Humanoid
+    local oldConnect = mt.__namecall
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        if method == "Connect" and tostring(self) == "Changed" then
+            module.Utility.Warn("Bypass PRO: intento de Changed bloqueado.")
+            return function() end
+        end
+        return oldConnect(self, unpack(args))
+    end)
+
+    setreadonly(mt, true)
+    module.Utility.Log("Bypass avanzado activado (Kick + Remotes + Spoof + Changed).")
+end
+---------------------------------------------------------------------
+
 -- Movement
 local flySpeed = module.Settings.Movement.FlySpeedBase
 
