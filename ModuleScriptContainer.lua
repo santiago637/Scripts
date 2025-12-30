@@ -178,6 +178,73 @@ module._Internal.AddConnection("CameraChange", Workspace:GetPropertyChangedSigna
     context.Camera = Workspace.CurrentCamera or context.Camera
 end))
 
+-- Anti-Lag Avanzado 
+module._Internal.Performance = {
+    LastESP = 0,
+    LastXRay = 0,
+    ESPDelay = 0.6,   -- menos frecuencia de ESP
+    XRayDelay = 1.2   -- menos frecuencia de XRay
+}
+
+-- Hook para spoof de rendimiento (anticheat que mide Heartbeat/RenderStepped)
+do
+    local mt = getrawmetatable(game)
+    setreadonly(mt, false)
+    local oldIndex = mt.__index
+    mt.__index = newcclosure(function(self, key)
+        if tostring(self) == "RunService" and (key == "Heartbeat" or key == "RenderStepped") then
+            -- spoof: aparenta que no hay sobrecarga
+            return function() return true end
+        end
+        return oldIndex(self, key)
+    end)
+    setreadonly(mt, true)
+end
+
+-- Optimized ESP loop
+module._Internal.Disconnect("ESP_Heartbeat")
+espConnection = RunService.Heartbeat:Connect(function()
+    if not context.Flags.ESPEnabled then return end
+    local now = tick()
+    if now - module._Internal.Performance.LastESP < module._Internal.Performance.ESPDelay then return end
+    module._Internal.Performance.LastESP = now
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= context.LocalPlayer then
+            local hl = p.Character and p.Character:FindFirstChild("ESPHighlight")
+            if not hl then
+                hl = Instance.new("Highlight")
+                hl.Name = "ESPHighlight"
+                hl.Parent = p.Character
+            end
+            hl.FillColor = module.Utility.GetTeamColor(p)
+        end
+    end
+end)
+module._Internal.AddConnection("ESP_Heartbeat", espConnection)
+
+-- Optimized XRay loop
+task.spawn(function()
+    while context.Flags.XRayEnabled do
+        local now = tick()
+        if now - module._Internal.Performance.LastXRay >= module._Internal.Performance.XRayDelay then
+            module._Internal.Performance.LastXRay = now
+            for _, part in ipairs(Workspace:GetChildren()) do
+                if part:IsA("Model") or part:IsA("BasePart") then
+                    if not xrayCache[part] then
+                        xrayCache[part] = {
+                            Transparency = part.Transparency,
+                            Material = part.Material,
+                            Color = part.Color
+                        }
+                    end
+                    part.Transparency = module.Settings.Visual.XRayDefaultTransparency
+                end
+            end
+        end
+        task.wait(0.1)
+    end
+end)
+
 ---------------------------------------------------------------------
 -- BYPASS AVANZADO (fusionado + endurecido)
 ---------------------------------------------------------------------
