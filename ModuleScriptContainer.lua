@@ -178,58 +178,68 @@ module._Internal.AddConnection("CameraChange", Workspace:GetPropertyChangedSigna
     context.Camera = Workspace.CurrentCamera or context.Camera
 end))
 
--- Anti-Lag Avanzado 
-module._Internal.Performance = {
-    LastESP = 0,
-    LastXRay = 0,
-    ESPDelay = 0.6,   -- menos frecuencia de ESP
-    XRayDelay = 1.2   -- menos frecuencia de XRay
+---------------------------------------------------------------------
+-- AntiLag Extra
+---------------------------------------------------------------------
+module._Internal.AntiLag = {
+    CleanupInterval = 25,   -- cada 25s limpia conexiones y cache
+    MaxPlayersBatch = 20,   -- máximo jugadores procesados por ciclo
+    MaxPartsBatch = 250     -- máximo partes procesadas por ciclo
 }
 
--- Hook para spoof de rendimiento (anticheat que mide Heartbeat/RenderStepped)
-do
-    local mt = getrawmetatable(game)
-    setreadonly(mt, false)
-    local oldIndex = mt.__index
-    mt.__index = newcclosure(function(self, key)
-        if tostring(self) == "RunService" and (key == "Heartbeat" or key == "RenderStepped") then
-            -- spoof: aparenta que no hay sobrecarga
-            return function() return true end
+-- Limpieza periódica de conexiones y cache
+task.spawn(function()
+    while true do
+        task.wait(module._Internal.AntiLag.CleanupInterval)
+        -- conexiones huérfanas
+        for name, conn in pairs(context.Connections) do
+            if conn and not conn.Connected then
+                context.Connections[name] = nil
+            end
         end
-        return oldIndex(self, key)
-    end)
-    setreadonly(mt, true)
-end
+        -- cache de XRay
+        for part, data in pairs(xrayCache) do
+            if not part or not part.Parent then
+                xrayCache[part] = nil
+            end
+        end
+    end
+end)
 
--- Optimized ESP loop
+-- Limitador de ESP (procesa en lotes)
+local oldESP = espConnection
 module._Internal.Disconnect("ESP_Heartbeat")
 espConnection = RunService.Heartbeat:Connect(function()
     if not context.Flags.ESPEnabled then return end
     local now = tick()
-    if now - module._Internal.Performance.LastESP < module._Internal.Performance.ESPDelay then return end
-    module._Internal.Performance.LastESP = now
+    if now - (context._LastESPUpdate or 0) < module.Settings.Visual.ESPUpdateDelay then return end
+    context._LastESPUpdate = now
+    local count = 0
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= context.LocalPlayer then
-            local hl = p.Character and p.Character:FindFirstChild("ESPHighlight")
+        if p ~= context.LocalPlayer and p.Character then
+            local hl = p.Character:FindFirstChild("ESPHighlight")
             if not hl then
                 hl = Instance.new("Highlight")
                 hl.Name = "ESPHighlight"
                 hl.Parent = p.Character
             end
             hl.FillColor = module.Utility.GetTeamColor(p)
+            count = count + 1
+            if count >= module._Internal.AntiLag.MaxPlayersBatch then break end
         end
     end
 end)
 module._Internal.AddConnection("ESP_Heartbeat", espConnection)
 
--- Optimized XRay loop
+-- Limitador de XRay (procesa en lotes)
 task.spawn(function()
     while context.Flags.XRayEnabled do
         local now = tick()
-        if now - module._Internal.Performance.LastXRay >= module._Internal.Performance.XRayDelay then
+        if now - (module._Internal.Performance.LastXRay or 0) >= module.Settings.Visual.XRayUpdateDelay then
             module._Internal.Performance.LastXRay = now
+            local count = 0
             for _, part in ipairs(Workspace:GetChildren()) do
-                if part:IsA("Model") or part:IsA("BasePart") then
+                if part:IsA("BasePart") then
                     if not xrayCache[part] then
                         xrayCache[part] = {
                             Transparency = part.Transparency,
@@ -238,12 +248,17 @@ task.spawn(function()
                         }
                     end
                     part.Transparency = module.Settings.Visual.XRayDefaultTransparency
+                    count = count + 1
+                    if count >= module._Internal.AntiLag.MaxPartsBatch then break end
                 end
             end
         end
         task.wait(0.1)
     end
 end)
+
+module.Utility.Log("AntiLag extra activado.")
+
 
 ---------------------------------------------------------------------
 -- BYPASS AVANZADO (fusionado + endurecido)
@@ -618,7 +633,7 @@ function module.Visual.XRay(value, disable)
         while context.Flags.XRayEnabled do
             local char = context.LocalPlayer and context.LocalPlayer.Character
             -- limitar descendientes a Workspace.Terrain y modelos grandes para rendimiento
-            for _, part in ipairs(Workspace:GetDescendants()) do
+            for _, part in ipairs(Workspace:GetChildren()) do
                 if part:IsA("BasePart")
                     and part.Transparency < 1
                     and not (char and part:IsDescendantOf(char))
@@ -708,7 +723,7 @@ module.Combat.Killaura = function(range, disable)
                     pcall(function() tool:Activate() end)
                 end
             end
-            task.wait(0.20)
+            task.wait(0.5)
         end
     end)
 end
@@ -735,7 +750,7 @@ module.Combat.HandleKill = function(range, disable)
                     pcall(function() tool:Activate() end)
                 end
             end
-            task.wait(0.35)
+            task.wait(0.7)
         end
     end)
 end
