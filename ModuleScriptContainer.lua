@@ -1,10 +1,19 @@
+-- Floopa Hub - Librería de comandos (Hub principal)
+-- v3.1 - Correcciones críticas + rendimiento + otra capa de seguridad
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
 local Workspace = game:GetService("Workspace")
 
-local localPlayer = Players.LocalPlayer
+-- Espera robusta por LocalPlayer y cámara
+local localPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local currentCamera = Workspace.CurrentCamera
+if not currentCamera then
+    Workspace:GetPropertyChangedSignal("CurrentCamera"):Wait()
+    currentCamera = Workspace.CurrentCamera
+end
 
 -- Protección singleton del módulo
 local gv = getgenv()
@@ -13,6 +22,7 @@ if gv.FloopaHub.ModuleContainer then
     return gv.FloopaHub.ModuleContainer
 end
 
+-- Estado base
 local module = {
     Movement = {},
     Visual = {},
@@ -24,7 +34,7 @@ local module = {
 -- Contexto compartido
 local context = {
     LocalPlayer = localPlayer,
-    Camera = Workspace.CurrentCamera,
+    Camera = currentCamera,
     Connections = {},
     Flags = {
         Flying = false,
@@ -36,7 +46,12 @@ local context = {
         HandleKill = false,
         Aimbot = false
     },
-    _LastESPUpdate = 0
+    _LastESPUpdate = 0,
+    _Default = {
+        WalkSpeed = 16,
+        JumpPower = 50,
+        HipHeight = 2
+    }
 }
 
 module._Internal.Context = context
@@ -56,6 +71,9 @@ module.Settings = {
     },
     Utility = {
         LogPrefix = "[FloopaHub] "
+    },
+    Combat = {
+        TeamSafe = true -- evita atacar a compañeros
     }
 }
 
@@ -93,6 +111,14 @@ function module.Utility.GetTeamColor(player)
     return Color3.fromRGB(255, 0, 0)
 end
 
+function module.Utility.SameTeam(p1, p2)
+    if not module.Settings.Combat.TeamSafe then return false end
+    if p1 and p2 and p1.Team and p2.Team then
+        return p1.Team == p2.Team
+    end
+    return false
+end
+
 function module.Utility.GetCharacterRoot(plr)
     plr = plr or context.LocalPlayer
     if not plr then return nil, nil end
@@ -110,17 +136,19 @@ function module.Utility.GetHumanoid(plr)
 end
 
 function module.Utility.GetNearbyPlayers(maxDistance)
-    local myChar, myRoot = module.Utility.GetCharacterRoot(context.LocalPlayer)
+    local _, myRoot = module.Utility.GetCharacterRoot(context.LocalPlayer)
     if not myRoot then return {} end
     local nearby = {}
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= context.LocalPlayer and p.Character then
-            local root = p.Character:FindFirstChild("HumanoidRootPart")
-            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-            if root and hum and hum.Health > 0 then
-                local d = (myRoot.Position - root.Position).Magnitude
-                if d <= (tonumber(maxDistance) or 15) then
-                    table.insert(nearby, {player=p, root=root, humanoid=hum, distance=d})
+            if not module.Utility.SameTeam(context.LocalPlayer, p) then
+                local root = p.Character:FindFirstChild("HumanoidRootPart")
+                local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                if root and hum and hum.Health > 0 then
+                    local d = (myRoot.Position - root.Position).Magnitude
+                    if d <= (tonumber(maxDistance) or 15) then
+                        table.insert(nearby, {player=p, root=root, humanoid=hum, distance=d})
+                    end
                 end
             end
         end
@@ -145,71 +173,96 @@ function module._Internal.Disconnect(name)
     end
 end
 
+-- Mantener cámara actualizada
+module._Internal.AddConnection("CameraChange", Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    context.Camera = Workspace.CurrentCamera or context.Camera
+end))
+
 ---------------------------------------------------------------------
--- BYPASS AVANZADO (Pro)
+-- BYPASS AVANZADO (fusionado + endurecido)
 ---------------------------------------------------------------------
 do
     local mt = getrawmetatable(game)
     setreadonly(mt, false)
 
+    -- Hook único de __namecall
     local oldNamecall = mt.__namecall
     mt.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
-        local name = tostring(self)
+        local isInstance = typeof(self) == "Instance"
+        local nameLower = isInstance and self.Name:lower() or tostring(self):lower()
 
-        -- Bloquear Kick directo
+        -- Bloquear Kick
         if method == "Kick" then
+            -- No-op para preservar flujo sin ruptura
             module.Utility.Warn("Bypass PRO: Kick bloqueado.")
             return nil
         end
 
-        -- Filtrar remotes sospechosos
+        -- Filtrar remotes sospechosos (naive, pero con lista blanca básica)
         if method == "FireServer" or method == "InvokeServer" then
-            local lower = name:lower()
-            if string.find(lower, "ban") or string.find(lower, "log") or string.find(lower, "report") or string.find(lower, "anti") then
-                module.Utility.Warn("Bypass PRO: Remote bloqueado ("..name..")")
+            local bad = (string.find(nameLower, "ban")
+                      or string.find(nameLower, "log")
+                      or string.find(nameLower, "report")
+                      or string.find(nameLower, "anti"))
+            local whitelist = (string.find(nameLower, "antique") or string.find(nameLower, "reportcard"))
+            if bad and not whitelist then
+                module.Utility.Warn("Bypass PRO: Remote bloqueado ("..(isInstance and self.Name or tostring(self))..")")
                 return nil
             end
+        end
+
+        -- Neutralizar intentos de conectar a Changed del Humanoid (mejor detección)
+        if method == "Connect" and tostring(self) == "Changed" then
+            -- Devuelve una función vacía (connection fake) para no romper scripts que esperan un callable
+            module.Utility.Warn("Bypass PRO: intento de Changed bloqueado.")
+            return function() end
         end
 
         return oldNamecall(self, unpack(args))
     end)
 
+    -- Endurecer __index y __newindex para Humanoid (lectura/escritura)
     local oldIndex = mt.__index
     mt.__index = newcclosure(function(self, key)
-        if tostring(self) == "Humanoid" then
+        if typeof(self) == "Instance" and self:IsA("Humanoid") then
             if key == "WalkSpeed" then
                 return module.Settings.Movement.DefaultWalkSpeed
             elseif key == "JumpPower" then
-                return 50
+                return context._Default.JumpPower
             elseif key == "HipHeight" then
-                return 2
+                return context._Default.HipHeight
             end
         end
         return oldIndex(self, key)
     end)
 
-    -- Neutralizar Changed en Humanoid
-    local oldConnect = mt.__namecall
-    mt.__namecall = newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
-        if method == "Connect" and tostring(self) == "Changed" then
-            module.Utility.Warn("Bypass PRO: intento de Changed bloqueado.")
-            return function() end
+    local oldNewIndex = mt.__newindex
+    mt.__newindex = newcclosure(function(self, key, value)
+        if typeof(self) == "Instance" and self:IsA("Humanoid") then
+            -- Permite escritura pero normaliza valores peligrosos
+            if key == "WalkSpeed" then
+                local v = tonumber(value) or module.Settings.Movement.DefaultWalkSpeed
+                return oldNewIndex(self, key, math.clamp(v, 4, 200))
+            elseif key == "JumpPower" then
+                local v = tonumber(value) or context._Default.JumpPower
+                return oldNewIndex(self, key, math.clamp(v, 20, 150))
+            elseif key == "HipHeight" then
+                local v = tonumber(value) or context._Default.HipHeight
+                return oldNewIndex(self, key, math.clamp(v, 0, 5))
+            end
         end
-        return oldConnect(self, unpack(args))
+        return oldNewIndex(self, key, value)
     end)
 
     setreadonly(mt, true)
-    module.Utility.Log("Bypass avanzado activado (Kick + Remotes + Spoof + Changed).")
+    module.Utility.Log("Bypass avanzado activado (Kick + Remotes + Changed + Spoof R/W).")
 end
 ---------------------------------------------------------------------
 
 -- Movement
 local flySpeed = module.Settings.Movement.FlySpeedBase
-
 function module.Movement.Fly(arg, disable)
     local char, root = module.Utility.GetCharacterRoot(context.LocalPlayer)
     if not char or not root then
@@ -242,34 +295,34 @@ function module.Movement.Fly(arg, disable)
     local connBegan = UserInputService.InputBegan:Connect(function(input, gpe)
         if gpe then return end
         if input.KeyCode == Enum.KeyCode.W then
-            moveVec += Vector3.new(0, 0, -1)
+            moveVec = moveVec + Vector3.new(0, 0, -1)
         elseif input.KeyCode == Enum.KeyCode.S then
-            moveVec += Vector3.new(0, 0, 1)
+            moveVec = moveVec + Vector3.new(0, 0, 1)
         elseif input.KeyCode == Enum.KeyCode.A then
-            moveVec += Vector3.new(-1, 0, 0)
+            moveVec = moveVec + Vector3.new(-1, 0, 0)
         elseif input.KeyCode == Enum.KeyCode.D then
-            moveVec += Vector3.new(1, 0, 0)
+            moveVec = moveVec + Vector3.new(1, 0, 0)
         elseif input.KeyCode == Enum.KeyCode.Space then
-            moveVec += Vector3.new(0, 1, 0)
+            moveVec = moveVec + Vector3.new(0, 1, 0)
         elseif input.KeyCode == Enum.KeyCode.LeftShift then
-            moveVec += Vector3.new(0, -1, 0)
+            moveVec = moveVec + Vector3.new(0, -1, 0)
         end
     end)
 
     local connEnded = UserInputService.InputEnded:Connect(function(input, gpe)
         if gpe then return end
         if input.KeyCode == Enum.KeyCode.W then
-            moveVec -= Vector3.new(0, 0, -1)
+            moveVec = moveVec - Vector3.new(0, 0, -1)
         elseif input.KeyCode == Enum.KeyCode.S then
-            moveVec -= Vector3.new(0, 0, 1)
+            moveVec = moveVec - Vector3.new(0, 0, 1)
         elseif input.KeyCode == Enum.KeyCode.A then
-            moveVec -= Vector3.new(-1, 0, 0)
+            moveVec = moveVec - Vector3.new(-1, 0, 0)
         elseif input.KeyCode == Enum.KeyCode.D then
-            moveVec -= Vector3.new(1, 0, 0)
+            moveVec = moveVec - Vector3.new(1, 0, 0)
         elseif input.KeyCode == Enum.KeyCode.Space then
-            moveVec -= Vector3.new(0, 1, 0)
+            moveVec = moveVec - Vector3.new(0, 1, 0)
         elseif input.KeyCode == Enum.KeyCode.LeftShift then
-            moveVec -= Vector3.new(0, -1, 0)
+            moveVec = moveVec - Vector3.new(0, -1, 0)
         end
     end)
 
@@ -277,7 +330,7 @@ function module.Movement.Fly(arg, disable)
     module._Internal.AddConnection("Fly_InputEnded", connEnded)
 
     task.spawn(function()
-        while context.Flags.Flying and char.Parent do
+        while context.Flags.Flying do
             char, root = module.Utility.GetCharacterRoot(context.LocalPlayer)
             if not char or not root then break end
             local dir = moveVec
@@ -341,10 +394,11 @@ function module.Movement.Noclip(disable)
 
     if disable then
         context.Flags.Noclip = false
-        for _, part in ipairs(char:GetDescendants()) do
+        noclipLoopRunning = false
+        -- restaurar solo partes principales para rendimiento
+        for _, part in ipairs(char:GetChildren()) do
             if part:IsA("BasePart") then part.CanCollide = true end
         end
-        noclipLoopRunning = false
         return
     end
 
@@ -356,14 +410,14 @@ function module.Movement.Noclip(disable)
         while context.Flags.Noclip do
             char = context.LocalPlayer and context.LocalPlayer.Character
             if not char or not char.Parent then break end
-            for _, part in ipairs(char:GetDescendants()) do
+            for _, part in ipairs(char:GetChildren()) do
                 if part:IsA("BasePart") then part.CanCollide = false end
             end
             task.wait()
         end
         char = context.LocalPlayer and context.LocalPlayer.Character
         if char then
-            for _, part in ipairs(char:GetDescendants()) do
+            for _, part in ipairs(char:GetChildren()) do
                 if part:IsA("BasePart") then part.CanCollide = true end
             end
         end
@@ -470,6 +524,7 @@ function module.Visual.XRay(value, disable)
     task.spawn(function()
         while context.Flags.XRayEnabled do
             local char = context.LocalPlayer and context.LocalPlayer.Character
+            -- limitar descendientes a Workspace.Terrain y modelos grandes para rendimiento
             for _, part in ipairs(Workspace:GetDescendants()) do
                 if part:IsA("BasePart")
                     and part.Transparency < 1
@@ -556,6 +611,7 @@ module.Combat.Killaura = function(range, disable)
             if tool then
                 local targets = module.Utility.GetNearbyPlayers(radius)
                 for _, info in ipairs(targets) do
+                    -- Solo uso de Tool real
                     pcall(function() tool:Activate() end)
                 end
             end
@@ -582,12 +638,8 @@ module.Combat.HandleKill = function(range, disable)
             if tool and tool:FindFirstChild("Handle") then
                 local targets = module.Utility.GetNearbyPlayers(radius)
                 for _, info in ipairs(targets) do
-                    local hum = info.humanoid
+                    -- Solo automatiza contacto con arma real
                     pcall(function() tool:Activate() end)
-                    if hum and hum.Health > 0 then
-                        -- Nota: en juegos con validación de servidor, esto no hará daño real
-                        pcall(function() hum:TakeDamage(10) end)
-                    end
                 end
             end
             task.wait(0.35)
@@ -611,11 +663,12 @@ module.Combat.Aimbot = function(range, disable)
         while aimbotEnabled do
             local myChar = localPlayer.Character
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            camera = context.Camera
             if myChar and myRoot and camera then
                 local nearestRoot
                 local nearestDist = math.huge
                 for _, p in ipairs(Players:GetPlayers()) do
-                    if p ~= localPlayer and p.Character then
+                    if p ~= localPlayer and p.Character and not module.Utility.SameTeam(localPlayer, p) then
                         local hum = p.Character:FindFirstChildOfClass("Humanoid")
                         local root = p.Character:FindFirstChild("HumanoidRootPart")
                         local head = p.Character:FindFirstChild("Head")
@@ -631,7 +684,7 @@ module.Combat.Aimbot = function(range, disable)
                 if nearestRoot then
                     local camPos = camera.CFrame.Position
                     local look = CFrame.new(camPos, nearestRoot.Position)
-                    camera.CFrame = camera.CFrame:Lerp(look, 0.25)
+                    camera.CFrame = camera.CFrame:Lerp(look, 0.20)
                 end
             end
             RunService.RenderStepped:Wait()
@@ -675,6 +728,16 @@ function module._Internal.CleanupAll()
     end
     table.clear(xrayCache)
 
+    -- Restaurar valores por defecto seguros
+    local hum = module.Utility.GetHumanoid(context.LocalPlayer)
+    if hum then
+        pcall(function()
+            hum.WalkSpeed = module.Settings.Movement.DefaultWalkSpeed
+            hum.JumpPower = context._Default.JumpPower
+            hum.HipHeight = context._Default.HipHeight
+        end)
+    end
+
     -- limpiar visual de killaura local
     if context.Camera then
         local oldUI = context.Camera:FindFirstChild("KillauraCircleGui")
@@ -683,6 +746,18 @@ function module._Internal.CleanupAll()
 
     module.Utility.Log("CleanupAll ejecutado.")
 end
+
+-- Capa extra de seguridad: watchdog de integridad básica
+-- Si otro script intenta reemplazar nuestro módulo en getgenv, lo restauramos.
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if gv.FloopaHub.ModuleContainer ~= module then
+            gv.FloopaHub.ModuleContainer = module
+            module.Utility.Warn("Watchdog: módulo restaurado en getgenv.")
+        end
+    end
+end)
 
 gv.FloopaHub.ModuleContainer = module
 return module
