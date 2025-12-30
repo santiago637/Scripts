@@ -633,11 +633,11 @@ module.Combat.Killaura = function(range, disable)
                 if root then
                     circle.Position = root.Position - Vector3.new(0, 2.5, 0)
                 end
-                task.wait()
             end
-        end)
-    end
-
+            task.wait()
+        end
+    end)
+end
 ------------------------------------------------------------------
 -- ATAQUE REAL usando getNearbyPlayers()
 ------------------------------------------------------------------
