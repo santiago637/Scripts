@@ -55,6 +55,7 @@ local aliases = {
     ["noclip"]="noclip", ["unnoclip"]="unnoclip",
     ["walkspeed"]="walkspeed", ["speed"]="walkspeed", ["ws"]="walkspeed",
     ["unwalkspeed"]="unwalkspeed",
+    ["jumppower"]="jumppower", ["jp"]="jumppower", ["unjumppower"]="unjumppower"
     ["esp"]="esp", ["unesp"]="unesp",
     ["xray"]="xray", ["unxray"]="unxray",
     ["killaura"]="killaura", ["ka"]="killaura", ["unkillaura"]="unkillaura",
@@ -86,6 +87,10 @@ local function executeCommand(text)
         return safeCall(Commands.WalkSpeed, arg)
     elseif cmd == "unwalkspeed" then
         return safeCall(Commands.WalkSpeed, 16)
+    elseif cmd == "jumppower" then
+        return safeCall(Commands.JumpPower, arg, false)
+    elseif cmd == "unjumppower" then
+        return safeCall(Commands.JumpPower, nil, true)
     elseif cmd == "esp" then
         return safeCall(Commands.ESP, false)
     elseif cmd == "unesp" then
