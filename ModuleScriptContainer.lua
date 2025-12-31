@@ -414,6 +414,51 @@ function module.Movement.Noclip(disable)
     end)
 end
 
+function module.Movement.JumpPower(mode, power, disable)
+    local hum = module.Utility.GetHumanoid(context.LocalPlayer)
+    local root = context.LocalPlayer and context.LocalPlayer.Character and context.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hum or not root then
+        module.Utility.Warn("JumpPower: Humanoid o Root no disponibles.")
+        return
+    end
+
+    if disable then
+        context.Flags.JumpPower = false
+        module._Internal.Disconnect("JumpPower_Input")
+        module.Utility.Log("JumpPower desactivado.")
+        return
+    end
+
+    context.Flags.JumpPower = true
+    local strength = tonumber(power) or 80
+    local modeLower = tostring(mode or "high"):lower()
+
+    local conn = UserInputService.InputBegan:Connect(function(input, gpe)
+        if gpe or not context.Flags.JumpPower then return end
+        if input.KeyCode == Enum.KeyCode.Space then
+            if modeLower == "long" then
+                local dir = hum.MoveDirection
+                if dir.Magnitude > 0 then
+                    root.Velocity = Vector3.new(dir.X, 1, dir.Z).Unit * strength
+                else
+                    root.Velocity = Vector3.new(0, strength, 0)
+                end
+                module.Utility.Log("JumpPower (LongJump) ejecutado.")
+            elseif modeLower == "high" then
+                root.Velocity = Vector3.new(0, strength, 0)
+                module.Utility.Log("JumpPower (HighJump) ejecutado.")
+            elseif modeLower == "both" then
+                local dir = hum.MoveDirection
+                root.Velocity = Vector3.new(dir.X, strength, dir.Z)
+                module.Utility.Log("JumpPower (Long+High) ejecutado.")
+            else
+                module.Utility.Warn("JumpPower: modo inválido, usa 'long', 'high' o 'both'.")
+            end
+        end
+    end)
+    module._Internal.AddConnection("JumpPower_Input", conn)
+end
+
 ---------------------------------------------------------------------
 -- Visual
 ---------------------------------------------------------------------
@@ -696,6 +741,7 @@ function module.Fly(arg, disable) return module.Movement.Fly(arg, disable) end
 function module.Noclip(disable) return module.Movement.Noclip(disable) end
 function module.WalkSpeed(value) return module.Movement.WalkSpeed(value) end
 function module.InfiniteJump(enable) return module.Movement.InfiniteJump(enable) end
+function module.JumpPower(...) return module.Movement.JumpPower(value) end
 function module.ESP(disable) return module.Visual.ESP(disable) end
 function module.XRay(value, disable) return module.Visual.XRay(value, disable) end
 function module.Killaura(...) if module.Combat.Killaura then return module.Combat.Killaura(...) else module.Utility.Warn("Killaura no implementada") end end
