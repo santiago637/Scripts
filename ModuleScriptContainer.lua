@@ -414,7 +414,7 @@ function module.Movement.Noclip(disable)
     end)
 end
 
-function module.Movement.JumpPower(mode, power, disable)
+function module.Movement.JumpPower(value, disable)
     local hum = module.Utility.GetHumanoid(context.LocalPlayer)
     local root = context.LocalPlayer and context.LocalPlayer.Character and context.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not hum or not root then
@@ -425,38 +425,52 @@ function module.Movement.JumpPower(mode, power, disable)
     if disable then
         context.Flags.JumpPower = false
         module._Internal.Disconnect("JumpPower_Input")
+        module._Internal.Disconnect("JumpPower_Loop")
         module.Utility.Log("JumpPower desactivado.")
         return
     end
 
     context.Flags.JumpPower = true
-    local strength = tonumber(power) or 80
-    local modeLower = tostring(mode or "high"):lower()
+    local strength = tonumber(value) or 100
+    strength = math.clamp(strength, 30, 300) -- límites seguros
 
+    -- Cooldown anti‑spam
+    local lastJump = 0
+    local cooldown = 0.4
+
+    -- Input principal
     local conn = UserInputService.InputBegan:Connect(function(input, gpe)
         if gpe or not context.Flags.JumpPower then return end
         if input.KeyCode == Enum.KeyCode.Space then
-            if modeLower == "long" then
-                local dir = hum.MoveDirection
-                if dir.Magnitude > 0 then
-                    root.Velocity = Vector3.new(dir.X, 1, dir.Z).Unit * strength
-                else
-                    root.Velocity = Vector3.new(0, strength, 0)
-                end
-                module.Utility.Log("JumpPower (LongJump) ejecutado.")
-            elseif modeLower == "high" then
-                root.Velocity = Vector3.new(0, strength, 0)
-                module.Utility.Log("JumpPower (HighJump) ejecutado.")
-            elseif modeLower == "both" then
-                local dir = hum.MoveDirection
-                root.Velocity = Vector3.new(dir.X, strength, dir.Z)
-                module.Utility.Log("JumpPower (Long+High) ejecutado.")
+            local now = tick()
+            if now - lastJump < cooldown then return end
+            lastJump = now
+
+            -- Dirección dinámica: respeta MoveDirection
+            local dir = hum.MoveDirection
+            if dir.Magnitude > 0 then
+                root.Velocity = Vector3.new(dir.X * 0.5, strength, dir.Z * 0.5)
             else
-                module.Utility.Warn("JumpPower: modo inválido, usa 'long', 'high' o 'both'.")
+                root.Velocity = Vector3.new(root.Velocity.X, strength, root.Velocity.Z)
             end
+
+            module.Utility.Log("JumpPower ejecutado con fuerza "..tostring(strength))
         end
     end)
     module._Internal.AddConnection("JumpPower_Input", conn)
+
+    -- Loop de seguridad: limpia estado si el humanoid muere o respawnea
+    local loop = RunService.Heartbeat:Connect(function()
+        if not context.Flags.JumpPower then module._Internal.Disconnect("JumpPower_Loop") return end
+        local humCheck = module.Utility.GetHumanoid(context.LocalPlayer)
+        if not humCheck or humCheck.Health <= 0 then
+            context.Flags.JumpPower = false
+            module._Internal.Disconnect("JumpPower_Input")
+            module._Internal.Disconnect("JumpPower_Loop")
+            module.Utility.Warn("JumpPower desactivado por muerte/respawn.")
+        end
+    end)
+    module._Internal.AddConnection("JumpPower_Loop", loop)
 end
 
 ---------------------------------------------------------------------
