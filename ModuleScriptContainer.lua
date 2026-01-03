@@ -78,13 +78,14 @@ module.Settings = {
 }
 
 -- Hook optimizado: protege Kick y remotes, sin tocar Humanoid
-do
-    local mt = getrawmetatable(game)
-    local original = {
-        __namecall = mt.__namecall
-    }
+do 
+    local mt = getrawmetatable(game) 
+    if not mt then 
+        module.Utility.Warn("Metatable no disponible, hook no aplicado.") 
+        return 
+    end 
+    local original = { __namecall = mt.__namecall } 
     setreadonly(mt, false)
-
     mt.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
@@ -323,7 +324,7 @@ function module.Movement.Fly(arg, disable)
             end
 
             if dir.Magnitude > 0 then
-                root.Velocity = dir.Unit * flySpeed
+                root.Velocity = (dir).Unit * flySpeed
             else
                 root.Velocity = Vector3.new(0, 0, 0)
             end
@@ -406,9 +407,13 @@ function module.Movement.Noclip(disable)
             end
             RunService.Heartbeat:Wait()
         end
-        for part,orig in pairs(noclipCache) do
-            if part and part.Parent then part.CanCollide=orig end
-        end
+        pcall(function()
+            for part,orig in pairs(noclipCache) do
+                if part and part.Parent then part.CanCollide=orig end
+            end
+            table.clear(noclipCache)
+        end)
+
         table.clear(noclipCache)
         noclipLoopRunning=false
     end)
@@ -587,11 +592,13 @@ function module.Visual.XRay(value, disable)
                 then
                     local cache = xrayCache[part]
                     if not cache then
-                        cache = {
-                            Transparency = part.Transparency,
-                            Material = part.Material,
-                            Color = part.Color
-                        }
+                    cache = { 
+                        Transparency = part.Transparency, 
+                        Material = part.Material, 
+                        Color = part.Color, 
+                        Reflectance = part.Reflectance, 
+                        CastShadow = part.CastShadow 
+                    }
                         xrayCache[part] = cache
                     end
                     part.Transparency = transparency
@@ -755,7 +762,7 @@ function module.Fly(arg, disable) return module.Movement.Fly(arg, disable) end
 function module.Noclip(disable) return module.Movement.Noclip(disable) end
 function module.WalkSpeed(value) return module.Movement.WalkSpeed(value) end
 function module.InfiniteJump(enable) return module.Movement.InfiniteJump(enable) end
-function module.JumpPower(...) return module.Movement.JumpPower(value) end
+function module.JumpPower(value, disable) return module.Movement.JumpPower(value, disable) end
 function module.ESP(disable) return module.Visual.ESP(disable) end
 function module.XRay(value, disable) return module.Visual.XRay(value, disable) end
 function module.Killaura(...) if module.Combat.Killaura then return module.Combat.Killaura(...) else module.Utility.Warn("Killaura no implementada") end end
@@ -781,6 +788,8 @@ function module._Internal.CleanupAll()
             part.Transparency = data.Transparency
             part.Material = data.Material
             part.Color = data.Color
+            part.Reflectance = data.Reflectance
+            part.CastShadow = data.CastShadow
         end
     end
     table.clear(xrayCache)
