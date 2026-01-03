@@ -510,7 +510,7 @@ do
     sizeInc.Position = UDim2.new(0, 150, 0, 0)
     sizeInc.Text = "Panel +"
     sizeInc.TextColor3 = Color3.fromRGB(255, 255, 255)
-    setButtonStyle(sizeInc); applyCorner(sizeInc, UDim.New(0, 10))
+    setButtonStyle(sizeInc); applyCorner(sizeInc, UDim.new(0, 10))
 
     local function clampSize(w, h)
         return math.clamp(w, 280, 520), math.clamp(h, 420, 700)
