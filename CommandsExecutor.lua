@@ -1,16 +1,18 @@
 -- Floopa Hub - CommandsExecutor (GUI compacta inferior derecha)
--- v3.1 - Pro edition: bypass avanzado + UI pulida + integración con Hub
+-- v3.2: Correcciones estrictas (safeLoad robusto, notificaciones limitadas, arrastre pulido, estilo uniforme)
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 
--- Estado global
+-- Estado global y protección contra re-ejecución
 local gv = getgenv()
 gv.FloopaHub = gv.FloopaHub or {}
 if gv.FloopaHub.CommandsExecutorLoaded then
-    StarterGui:SetCore("SendNotification", {Title="Floopa Hub", Text="CommandsExecutor ya cargado", Duration=3})
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {Title="Floopa Hub", Text="CommandsExecutor ya cargado", Duration=3})
+    end)
     return
 end
 gv.FloopaHub.CommandsExecutorLoaded = true
@@ -21,17 +23,16 @@ local function notifySafe(title, text, duration)
     end)
 end
 
--- Capa de red: robusta y con fallback
+-- Red robusta con fallbacks
 local function safeHttpGet(url)
-    -- Intento directo
     local ok, res = pcall(function() return game:HttpGet(url) end)
-    if ok and type(res) == "string" then return res end
+    if ok and type(res) == "string" and #res > 0 then return res end
 
-    -- Intentos con request (exploit APIs si existen)
     local function tryReq(fn)
-        local ok, r = pcall(fn, {Url = url, Method = "GET"})
-        if ok and r and (r.Body or r.body) then
-            return r.Body or r.body
+        local ok2, r = pcall(fn, {Url = url, Method = "GET"})
+        if ok2 and r then
+            local body = r.Body or r.body
+            if type(body) == "string" and #body > 0 then return body end
         end
     end
 
@@ -48,19 +49,12 @@ local function safeHttpGet(url)
         if body then return body end
     end
 
-    -- Fallback local (solo si existe)
-    if readfile and isfile and isfile("MainLocalScript.lua") then
-        local okLocal, data = pcall(readfile, "MainLocalScript.lua")
-        if okLocal and type(data) == "string" then return data end
-    end
-
-    return ""
+    return nil
 end
 
 local function safeLoad(url)
     local res = safeHttpGet(url)
-    -- Validación mínima de contenido
-    if type(res) ~= "string" or #res < 50 or not res:lower():find("executecommand") then
+    if type(res) ~= "string" or #res == 0 then
         notifySafe("Floopa Hub", "No se pudo cargar: "..url, 3)
         return { ExecuteCommand = function() return false end }
     end
@@ -77,72 +71,15 @@ local function safeLoad(url)
     return mod
 end
 
--- Carga del módulo principal de comandos
+-- Carga del módulo principal de comandos (dispatcher)
 local Main = safeLoad("https://raw.githubusercontent.com/santiago637/Scripts/main/MainLocalScript.lua")
-
--- Bypass avanzado (encapsulado)
-do
-    local mt = getrawmetatable(game)
-    if mt then
-        setreadonly(mt, false)
-
-        local oldNamecall = mt.__namecall
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            local args = {...}
-            local name = tostring(self)
-
-            -- Bloquear Kick directo
-            if method == "Kick" then
-                warn("[FloopaHub] Bypass PRO: Kick bloqueado.")
-                return nil
-            end
-
-            -- Filtrar remotes sospechosos
-            if method == "FireServer" or method == "InvokeServer" then
-                local lower = (name or ""):lower()
-                if lower:find("ban") or lower:find("log") or lower:find("report") or lower:find("anti") then
-                    warn("[FloopaHub] Bypass PRO: Remote bloqueado ("..name..")")
-                    return nil
-                end
-            end
-
-            -- Neutralizar Changed en Humanoid (hardening)
-            if method == "Connect" and tostring(self) == "Changed" then
-                warn("[FloopaHub] Bypass PRO: intento de Changed bloqueado.")
-                return function() end
-            end
-
-            return oldNamecall(self, table.unpack(args))
-        end)
-
-        local oldIndex = mt.__index
-        mt.__index = newcclosure(function(self, key)
-            if tostring(self) == "Humanoid" then
-                if key == "WalkSpeed" then
-                    return 16
-                elseif key == "JumpPower" then
-                    return 50
-                elseif key == "HipHeight" then
-                    return 2
-                end
-            end
-            return oldIndex(self, key)
-        end)
-
-        setreadonly(mt, true)
-        print("[FloopaHub] Bypass avanzado activado (Kick + Remotes + Spoof + Changed).")
-    else
-        warn("[FloopaHub] Metatable no disponible, bypass no aplicado.")
-    end
-end
 
 -- Contexto GUI
 local localPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
--- Asegurar ScreenGui
+-- ScreenGui singleton
 local gui = playerGui:FindFirstChild("FloopaHubGUI")
 if not gui then
     gui = Instance.new("ScreenGui")
@@ -156,7 +93,6 @@ end
 local frame = gui:FindFirstChild("MainFrame") or Instance.new("Frame")
 frame.Name = "MainFrame"
 frame.Size = isMobile and UDim2.new(0,300,0,360) or UDim2.new(0,280,0,320)
-frame.AnchorPoint = Vector2.new(0,0)
 frame.BackgroundColor3 = Color3.fromRGB(20,20,30)
 frame.BorderSizePixel = 0
 frame.Visible = true
@@ -170,9 +106,11 @@ if not frame:FindFirstChildOfClass("UIStroke") then
     stroke.Thickness = 1
 end
 
+-- Registrar en getgenv para toggle desde el Hub
 gv.FloopaHub.ExecutorFrame = frame
 gv.FloopaHub.ExecutorVisible = true
 
+-- Posicionar en esquina inferior derecha
 local function placeBottomRight(margin)
     local cam = workspace.CurrentCamera
     if not cam then return end
@@ -213,7 +151,7 @@ title.Name = "TitleLabel"
 title.Size = UDim2.new(1,-90,1,0)
 title.Position = UDim2.new(0,45,0,0)
 title.BackgroundTransparency = 1
-title.Text = "Floopa Hub • v3.1 Pro"
+title.Text = "Floopa Hub • CommandsExecutor"
 title.TextColor3 = Color3.fromRGB(255,255,255)
 title.Font = Enum.Font.GothamBold
 title.TextScaled = true
@@ -247,8 +185,11 @@ closeBtn.MouseButton1Click:Connect(function()
     notifySafe("Floopa Hub","CommandsExecutor oculto",2)
 end)
 
--- Notificaciones locales con fade
+-- Notificaciones locales con limitador
+local activeNotifs = 0
 local function showNotification(msg)
+    if activeNotifs >= 3 then return end
+    activeNotifs += 1
     local notif = Instance.new("Frame")
     notif.Name = "Notification"
     notif.Size = UDim2.new(0,260,0,50)
@@ -279,6 +220,7 @@ local function showNotification(msg)
             task.wait(0.45)
             if notif and notif.Parent then notif:Destroy() end
         end
+        activeNotifs -= 1
     end)
 end
 
@@ -312,7 +254,7 @@ commandBox.FocusLost:Connect(function()
     TweenService:Create(commandBox, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(25,25,40)}):Play()
 end)
 
--- Lista de comandos
+-- Lista de comandos mostrados
 local commandsInfo = {
     fly = "Permite volar.",
     unfly = "Desactiva el vuelo.",
@@ -334,7 +276,7 @@ local commandsInfo = {
     unaimbot = "Desactiva Aimbot.",
 }
 
--- ScrollingFrame con UIListLayout (sin cálculos manuales)
+-- ScrollingFrame con UIListLayout
 local scrollFrame = frame:FindFirstChild("CommandsScroll") or Instance.new("ScrollingFrame")
 scrollFrame.Name = "CommandsScroll"
 scrollFrame.Size = UDim2.new(1,-20,1,-110)
@@ -379,7 +321,6 @@ for _,cmd in ipairs(keys) do
         stroke.Thickness = 1
     end
 
-    -- Hover animado
     b.MouseEnter:Connect(function()
         TweenService:Create(b, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(55,55,85)}):Play()
     end)
@@ -389,10 +330,9 @@ for _,cmd in ipairs(keys) do
 
     b.MouseButton1Click:Connect(function()
         local ok = false
-        -- Si Main tiene ExecuteCommand(cmd) retorna true/false
         if Main and type(Main.ExecuteCommand) == "function" then
             local success, res = pcall(Main.ExecuteCommand, cmd)
-            ok = success and res == true or res == nil or res == true
+            ok = success and (res == true or res == nil)
         end
         if ok then
             showNotification("Comando ejecutado: "..cmd)
@@ -409,7 +349,7 @@ commandBox.FocusLost:Connect(function(enterPressed)
         local ok = false
         if Main and type(Main.ExecuteCommand) == "function" then
             local success, res = pcall(Main.ExecuteCommand, text)
-            ok = success and res == true or res == nil or res == true
+            ok = success and (res == true or res == nil)
         end
         if ok then
             showNotification("Comando ejecutado: "..text)
@@ -444,10 +384,6 @@ end)
 UserInputService.InputChanged:Connect(function(i)
     if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
         local delta = i.Position - dragStart
-        if i.UserInputType == Enum.UserInputType.Touch then
-            delta = delta * 0.7
-        end
-
         local newX = startPos.X + delta.X
         local newY = startPos.Y + delta.Y
 
